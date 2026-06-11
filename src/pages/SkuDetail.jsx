@@ -7,7 +7,7 @@ import ChecklistCard from '../components/ChecklistCard.jsx';
 import {
   fetchSku, fetchStageTemplates, fetchFiles, fetchComments, fetchClient,
   toggleStage, addTextBrief, addExternalLink, addComment, deleteComment,
-  uploadToR2, registerUploadedFile,
+  uploadToR2, registerUploadedFile, deleteFile,
   updateSkuBuyer, effectiveBuyer, updateSkuPrintVendor,
   requestSkuChanges, resolveSkuChanges,
   fetchChecklistItems, fetchSkuChecker,
@@ -70,6 +70,11 @@ export default function SkuDetail() {
   const [reason, setReason] = useState('');
   const [reqErr, setReqErr] = useState('');
   const [reqBusy, setReqBusy] = useState(false);
+
+  // file-delete state
+  const [deletingFile, setDeletingFile] = useState(null);
+  const [deleteErr,    setDeleteErr]    = useState('');
+  const [deleteBusy,   setDeleteBusy]   = useState(false);
 
   // compliance checklists state
   const [checklist, setChecklist] = useState([]);
@@ -266,6 +271,16 @@ export default function SkuDetail() {
       await deleteComment(id);
       setComments(await fetchComments(skuId));
     } catch (e) { setErr(e.message); }
+  }
+
+  async function onDeleteFile() {
+    setDeleteBusy(true); setDeleteErr('');
+    try {
+      await deleteFile(deletingFile.id);
+      setFiles(await fetchFiles(skuId));
+      setDeletingFile(null);
+    } catch (e) { setDeleteErr(e.message); }
+    finally { setDeleteBusy(false); }
   }
 
   async function submitComment() {
@@ -486,6 +501,11 @@ export default function SkuDetail() {
                   {new Date(fl.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                 </span>
                 <button className="btn sm" onClick={() => setViewing(fl)}>View</button>
+                {isAdmin && (
+                  <button className="btn ghost sm danger"
+                          onClick={() => { setDeletingFile(fl); setDeleteErr(''); }}
+                          aria-label={`Delete ${fl.title}`}>Delete</button>
+                )}
               </div>
             ))}
           </div>
@@ -624,6 +644,24 @@ export default function SkuDetail() {
               <button className="btn ghost" onClick={() => setShowRequest(false)}>Cancel</button>
               <button className="btn primary" onClick={submitRequestChanges} disabled={!reason.trim() || reqBusy}>
                 {reqBusy ? 'Sending…' : 'Request changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deletingFile && (
+        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setDeletingFile(null)}>
+          <div className="card modal">
+            <h2 className="display" style={{ fontSize: 22, marginBottom: 6 }}>Delete file?</h2>
+            <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 14 }}>
+              <strong>{deletingFile.title}</strong> will be permanently removed. This cannot be undone.
+            </p>
+            {deleteErr && <p className="error-text" style={{ marginBottom: 10 }}>{deleteErr}</p>}
+            <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
+              <button className="btn ghost" onClick={() => setDeletingFile(null)}>Cancel</button>
+              <button className="btn danger" onClick={onDeleteFile} disabled={deleteBusy}>
+                {deleteBusy ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

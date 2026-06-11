@@ -80,6 +80,16 @@ export async function fetchFiles(skuId) {
   return data || [];
 }
 
+export async function deleteFile(fileId) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch('/api/storage/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ fileId }),
+  });
+  if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || 'Delete failed'); }
+}
+
 export async function fetchComments(skuId) {
   const { data } = await supabase
     .from('comments')

@@ -1,7 +1,7 @@
 // api/_lib/r2.js
 // Cloudflare R2 via its S3-compatible API. App-level credentials from env —
 // no per-user OAuth, no tokens to refresh, nothing ever exposed to the browser.
-import { S3Client, PutObjectCommand, GetObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadBucketCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 function client() {
@@ -29,6 +29,10 @@ export function presignGetUrl(key, expiresIn = 3600) {
     new GetObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key }),
     { expiresIn }
   );
+}
+
+export async function deleteObject(key) {
+  await client().send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key }));
 }
 
 // Key segments stay human-readable; strip path separators and URL-hostile chars.
