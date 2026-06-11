@@ -5,14 +5,15 @@ import { useAuth } from '../auth/useAuth.jsx';
 import FileViewer from '../components/FileViewer.jsx';
 import ChecklistCard from '../components/ChecklistCard.jsx';
 import {
-  fetchSku, fetchStageTemplates, fetchFiles, fetchComments,
+  fetchSku, fetchStageTemplates, fetchFiles, fetchComments, fetchClient,
   toggleStage, addTextBrief, addExternalLink, addComment, deleteComment,
   uploadToOneDrive, registerUploadedFile,
   updateSkuBuyer, effectiveBuyer, updateSkuPrintVendor,
   requestSkuChanges, resolveSkuChanges,
-  fetchChecklistItems, fetchSkuChecker, fetchClientUsers,
+  fetchChecklistItems, fetchSkuChecker,
   toggleChecklistItem, generateSkuChecklist, addChecklistItem, deleteChecklistItem,
   updateSkuPowerType, updateSkuComplianceUser, updateSkuHasIm, updateSkuImDone,
+  notifyComplianceApproved, FINAL_COMPLIANCE_LABEL,
 } from '../lib/api.js';
 
 const PINK_STAGES = new Set([
@@ -58,6 +59,7 @@ export default function SkuDetail() {
   // buyer override edit state
   const [editingBuyer, setEditingBuyer] = useState(false);
   const [buyerDraft, setBuyerDraft] = useState('');
+  const [buyerEmailDraft, setBuyerEmailDraft] = useState('');
 
   // print vendor edit state
   const [editingPrintVendor, setEditingPrintVendor] = useState(false);
@@ -72,7 +74,7 @@ export default function SkuDetail() {
   // compliance checklists state
   const [checklist, setChecklist] = useState([]);
   const [checker, setChecker] = useState(null);
-  const [clientUsers, setClientUsers] = useState([]);
+  const [client, setClient] = useState(null); // tenant row: compliance market → checker mapping
 
   async function load() {
     setLoadErr('');
@@ -80,16 +82,16 @@ export default function SkuDetail() {
       const s = await fetchSku(skuId);
       setSku(s);
       if (s) {
-        const [t, f, c, items, chk, users] = await Promise.all([
+        const [t, f, c, items, chk, cl] = await Promise.all([
           fetchStageTemplates(s.client_id),
           fetchFiles(skuId),
           fetchComments(skuId),
           fetchChecklistItems(skuId),
           fetchSkuChecker(skuId),
-          fetchClientUsers(s.client_id), // RLS-empty for client users; harmless
+          fetchClient(s.client_id), // for the compliance-market → checker mapping
         ]);
         setTemplates(t); setFiles(f); setComments(c);
-        setChecklist(items); setChecker(chk); setClientUsers(users);
+        setChecklist(items); setChecker(chk); setClient(cl);
       }
     } catch (e) {
       setLoadErr(e.message || 'Could not load this SKU.');
@@ -106,6 +108,9 @@ export default function SkuDetail() {
     const row = stageByKey[tpl.stage_key];
     if (!row) return;
     await toggleStage(row, !row.done);
+    // The single live email: compliance approval. Fire-and-forget — the
+    // server re-verifies and dedupes, a failure never blocks the toggle.
+    if (!row.done && tpl.stage_key === 'compliance_approved') notifyComplianceApproved(sku.id);
     load();
   }
 
@@ -157,17 +162,18 @@ export default function SkuDetail() {
 
   function startEditBuyer() {
     setBuyerDraft(sku.buyer_override || '');
+    setBuyerEmailDraft(sku.buyer_email_override || '');
     setEditingBuyer(true);
   }
 
   async function saveBuyer() {
-    await updateSkuBuyer(sku.id, buyerDraft.trim() || null);
+    await updateSkuBuyer(sku.id, buyerDraft.trim() || null, buyerEmailDraft.trim() || null);
     setEditingBuyer(false);
     load();
   }
 
   async function resetBuyer() {
-    await updateSkuBuyer(sku.id, null);
+    await updateSkuBuyer(sku.id, null, null);
     setEditingBuyer(false);
     load();
   }
@@ -210,8 +216,17 @@ export default function SkuDetail() {
     try { await updateSkuPowerType(sku.id, value); load(); } catch (e) { setErr(e.message); }
   }
 
-  async function onChecker(userId) {
-    try { await updateSkuComplianceUser(sku.id, userId || null); load(); } catch (e) { setErr(e.message); }
+  // The checker is one of two fixed roles per tenant (India / Global), mapped
+  // on the clients row — not a free pick among all client users.
+  async function onMarket(market) {
+    const userId = market === 'india' ? client?.compliance_india_user_id
+      : market === 'global' ? client?.compliance_global_user_id
+      : null;
+    if (market && !userId) {
+      setErr('No checker mapped for this market yet — run the email-digests setup SQL.');
+      return;
+    }
+    try { await updateSkuComplianceUser(sku.id, userId); load(); } catch (e) { setErr(e.message); }
   }
 
   async function onHasIm(checked) {
@@ -227,7 +242,15 @@ export default function SkuDetail() {
   }
 
   async function onToggleItem(item) {
-    try { await toggleChecklistItem(item.id, !item.checked); load(); } catch (e) { setErr(e.message); }
+    try {
+      await toggleChecklistItem(item.id, !item.checked);
+      // The single live email: ticking the final compliance item. Fire-and-
+      // forget — the server re-verifies and dedupes, never blocks the tick.
+      if (!item.checked && item.audience === 'compliance' && item.label === FINAL_COMPLIANCE_LABEL) {
+        notifyComplianceApproved(sku.id);
+      }
+      load();
+    } catch (e) { setErr(e.message); }
   }
 
   async function onAddItem(audience, label) {
@@ -260,6 +283,12 @@ export default function SkuDetail() {
   const adminItems = checklist.filter((i) => i.audience === 'admin');
   const complianceItems = checklist.filter((i) => i.audience === 'compliance');
   const isChecker = !!profile?.id && sku.compliance_user_id === profile.id;
+  // Market is derived from which mapped checker holds the assignment; a legacy
+  // assignment that matches neither mapped user shows as a disabled "custom".
+  const marketValue = !sku.compliance_user_id ? ''
+    : sku.compliance_user_id === client?.compliance_india_user_id ? 'india'
+    : sku.compliance_user_id === client?.compliance_global_user_id ? 'global'
+    : 'custom';
   const powerHint = isAdmin && sku.power_type === 'unknown'
     ? 'Power type not set — only general items loaded. Set a power type above to load type-specific checks.'
     : null;
@@ -283,6 +312,8 @@ export default function SkuDetail() {
             <div className="toolrow" style={{ marginTop: 10 }}>
               <input type="text" placeholder="Buyer (overrides project)" value={buyerDraft} autoFocus
                      onChange={(e) => setBuyerDraft(e.target.value)} style={{ width: 200 }} />
+              <input type="email" placeholder="Buyer email (overrides project)" value={buyerEmailDraft}
+                     onChange={(e) => setBuyerEmailDraft(e.target.value)} style={{ width: 220 }} />
               <button className="btn primary sm" onClick={saveBuyer}>Save</button>
               <button className="btn ghost sm" onClick={() => setEditingBuyer(false)}>Cancel</button>
             </div>
@@ -343,12 +374,21 @@ export default function SkuDetail() {
                       style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }}>
                 {POWER_TYPES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
               </select>
-              <label className="eyebrow" htmlFor="compliance-checker">Compliance checker</label>
-              <select id="compliance-checker" value={sku.compliance_user_id || ''} onChange={(e) => onChecker(e.target.value)}
+              <label className="eyebrow" htmlFor="compliance-market">Compliance market</label>
+              <select id="compliance-market" value={marketValue} onChange={(e) => onMarket(e.target.value)}
                       style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }}>
                 <option value="">— none —</option>
-                {clientUsers.map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
+                <option value="india">India (Santosh)</option>
+                <option value="global">Global / Export (Emily)</option>
+                {marketValue === 'custom' && (
+                  <option value="custom" disabled>Custom: {checker?.full_name || checker?.email || 'assigned'}</option>
+                )}
               </select>
+              {sku.second_gate && (
+                <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+                  2nd-gate SKU — second approval may need manual checker reassignment after the first gate.
+                </span>
+              )}
               <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
                 <input type="checkbox" checked={sku.has_im} style={{ width: 'auto' }}
                        onChange={(e) => onHasIm(e.target.checked)} />

@@ -624,3 +624,49 @@ end $$;
 -- Distinct from projects.vendor (the factory) — this is where final files go for
 -- printing. Inherits existing skus RLS (admin write, client read).
 alter table public.skus add column if not exists print_vendor text;
+
+-- ===== Migration: Email digests + live compliance-approved notification =====
+-- Run this block in the Supabase SQL Editor against the live project.
+-- One daily digest per recipient (admin / supervisor / buyer / checker) sent by
+-- /api/cron/daily-digest; the single live email is compliance approval via
+-- /api/notify/compliance-approved. digest_log dedupes both.
+
+-- 1. Recipient columns. They inherit existing RLS (admin write, client read own
+--    tenant) — supervisor_email and the checker UUIDs become readable by the
+--    tenant's client users (colleagues' work info; acceptable).
+alter table public.clients  add column if not exists supervisor_email text;
+alter table public.clients  add column if not exists compliance_india_user_id  uuid references public.profiles(id);
+alter table public.clients  add column if not exists compliance_global_user_id uuid references public.profiles(id);
+alter table public.projects add column if not exists buyer_email text;
+alter table public.skus     add column if not exists buyer_email_override text;
+
+-- 2. digest_log: send ledger. RLS enabled with ZERO policies — service role
+--    (the API) only, same pattern as integration_tokens.
+create table if not exists public.digest_log (
+  id          uuid primary key default gen_random_uuid(),
+  kind        text not null,   -- admin_digest|supervisor_digest|buyer_digest|checker_digest|compliance_approved
+  recipient   text not null,
+  sku_id      uuid references public.skus(id) on delete set null,
+  digest_date date,            -- UTC run date for dailies; NULL for live emails
+  sent_at     timestamptz not null default now(),
+  meta        jsonb not null default '{}'
+);
+alter table public.digest_log enable row level security;
+-- Daily dedupe: one row per kind+recipient+day. NOT partial: NULL digest_date
+-- rows (live emails) never conflict, and supabase-js upsert onConflict cannot
+-- target a partial index.
+create unique index if not exists digest_log_daily_uniq
+  on public.digest_log (kind, recipient, digest_date);
+-- Live 10-minute dedupe lookup.
+create index if not exists digest_log_live_idx
+  on public.digest_log (kind, sku_id, sent_at);
+
+-- 3. Hamleys wiring. Run scripts/create_users.mjs FIRST so Emily Liu exists,
+--    otherwise re-run the second UPDATE once she does (its subselect returns
+--    null until then). Verify Emily's real email — eliu@hamleys.com.hk is a
+--    placeholder.
+update public.clients set supervisor_email = 'neha.gadia@ril.com' where slug = 'hamleys';
+update public.clients set
+  compliance_india_user_id  = (select id from public.profiles where lower(email) = lower('Santosh107.Kumar@ril.com')),
+  compliance_global_user_id = (select id from public.profiles where lower(email) = 'eliu@hamleys.com.hk')
+where slug = 'hamleys';

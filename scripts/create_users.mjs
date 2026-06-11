@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // scripts/create_users.mjs
 //
-// Creates the 8 Supabase auth users for the Hamleys tenant and sets each
+// Creates the Supabase auth users for the Hamleys tenant and sets each
 // profile's role / client_id / full_name. Idempotent: safe to re-run.
 //
 // Zero dependencies — uses Node 18+ global fetch. No package.json / npm install
@@ -37,6 +37,10 @@ const USERS = [
   { email: 'Santosh107.Kumar@ril.com',   role: 'client', full_name: 'Santosh Kumar',     tenant: true  },
   { email: 'lakshmita1.Sethi@ril.com',   role: 'client', full_name: 'Lakshmita Sethi',   tenant: true  },
   { email: 'Afroz.Hathiyari@ril.com',    role: 'client', full_name: 'Afroz Hathiyari',   tenant: true  },
+  // Global/export compliance checker (Hamleys Asia HK). PLACEHOLDER EMAIL —
+  // verify Emily's real address before running; update the email-digests
+  // checker-mapping SQL to match if it changes.
+  { email: 'eliu@hamleys.com.hk',        role: 'client', full_name: 'Emily Liu',         tenant: true  },
 ];
 
 const args = new Set(process.argv.slice(2));
@@ -201,7 +205,7 @@ if (newlyCreated.length > 0) {
   console.log('  ---------------------------------------------------------------');
   console.log('  Share these securely, then delete the file.');
 } else {
-  console.log('\n  All 8 users already existed — roles/profiles re-applied. No new passwords.');
+  console.log('\n  All users already existed — roles/profiles re-applied. No new passwords.');
 }
 
 console.log('\n  Done. Verify by signing in as vineeth@designinnsaeit.com at the app URL.\n');

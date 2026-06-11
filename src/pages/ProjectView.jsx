@@ -6,6 +6,7 @@ import StageRail from '../components/StageRail.jsx';
 import {
   fetchProject, fetchSkus, fetchStageTemplates, createSku, toggleStage,
   updateProjectBuyer, effectiveBuyer, fetchProjectChecklistSummary,
+  notifyComplianceApproved,
 } from '../lib/api.js';
 import { buildProjectCsv, downloadCsv, projectCsvFilename, buildProjectSummary } from '../lib/export.js';
 
@@ -20,9 +21,10 @@ export default function ProjectView() {
   const [templates, setTemplates] = useState([]);
   const [filter, setFilter] = useState('');
   const [showNew, setShowNew] = useState(false);
-  const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', has_im: false, print_vendor: '' });
+  const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', buyer_email_override: '', has_im: false, print_vendor: '' });
   const [editingBuyer, setEditingBuyer] = useState(false);
   const [buyerDraft, setBuyerDraft] = useState('');
+  const [buyerEmailDraft, setBuyerEmailDraft] = useState('');
   const [copied, setCopied] = useState(false);
   const [err, setErr] = useState('');
   const [checklistSummary, setChecklistSummary] = useState({});
@@ -67,6 +69,9 @@ export default function ProjectView() {
     setErr('');
     try {
       await toggleStage(stageRow, done);
+      // The single live email: compliance approval. Fire-and-forget — the
+      // server re-verifies and dedupes, a failure never blocks the toggle.
+      if (done && stageRow.stage_key === 'compliance_approved') notifyComplianceApproved(stageRow.sku_id);
       setSkus(await fetchSkus(projectId));
     } catch (e) {
       setErr(e.message || 'Could not update stage.');
@@ -81,9 +86,10 @@ export default function ProjectView() {
         ...f,
         sub_brand: f.sub_brand === 'Other / none' ? null : f.sub_brand || null,
         buyer_override: f.buyer_override.trim() || null,
+        buyer_email_override: f.buyer_email_override.trim() || null,
         print_vendor: f.print_vendor.trim() || null,
       });
-      setF({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', has_im: false, print_vendor: '' });
+      setF({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', buyer_email_override: '', has_im: false, print_vendor: '' });
       setShowNew(false);
       const list = await fetchSkus(projectId);
       setSkus(list);
@@ -96,13 +102,14 @@ export default function ProjectView() {
   function startEditBuyer() {
     setErr('');
     setBuyerDraft(project.buyer || '');
+    setBuyerEmailDraft(project.buyer_email || '');
     setEditingBuyer(true);
   }
 
   async function saveBuyer() {
     setErr('');
     try {
-      await updateProjectBuyer(project.id, buyerDraft.trim() || null);
+      await updateProjectBuyer(project.id, buyerDraft.trim() || null, buyerEmailDraft.trim() || null);
       setEditingBuyer(false);
       setProject(await fetchProject(projectId)); // refetch so inherited SKU rows update live
     } catch (e) {
@@ -144,6 +151,8 @@ export default function ProjectView() {
             <div className="toolrow" style={{ marginTop: 8 }}>
               <input type="text" placeholder="Buyer name" value={buyerDraft} autoFocus
                      onChange={(e) => setBuyerDraft(e.target.value)} style={{ width: 200 }} />
+              <input type="email" placeholder="Buyer email" value={buyerEmailDraft}
+                     onChange={(e) => setBuyerEmailDraft(e.target.value)} style={{ width: 220 }} />
               <button className="btn primary sm" onClick={saveBuyer}>Save</button>
               <button className="btn ghost sm" onClick={() => { setErr(''); setEditingBuyer(false); }}>Cancel</button>
               {err && <p className="error-text">{err}</p>}
@@ -152,6 +161,9 @@ export default function ProjectView() {
             (project.buyer || isAdmin) && (
               <p className="sub" style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
                 {project.buyer ? <span>Buyer: {project.buyer}</span> : <span style={{ color: 'var(--text-faint)' }}>No buyer set</span>}
+                {project.buyer_email && (
+                  <span style={{ color: 'var(--text-faint)', fontSize: 12.5 }}>({project.buyer_email})</span>
+                )}
                 {isAdmin && (
                   <button className="btn ghost sm" onClick={startEditBuyer}>{project.buyer ? 'Edit' : 'Add buyer'}</button>
                 )}
@@ -260,6 +272,11 @@ export default function ProjectView() {
               <label className="eyebrow">Buyer (overrides project buyer)</label>
               <input type="text" placeholder="Leave blank to inherit" value={f.buyer_override}
                      onChange={(e) => setF({ ...f, buyer_override: e.target.value })} />
+            </div>
+            <div className="field">
+              <label className="eyebrow">Buyer email (overrides project)</label>
+              <input type="email" placeholder="Leave blank to inherit" value={f.buyer_email_override}
+                     onChange={(e) => setF({ ...f, buyer_email_override: e.target.value })} />
             </div>
             <div className="field">
               <label className="eyebrow">Print vendor</label>

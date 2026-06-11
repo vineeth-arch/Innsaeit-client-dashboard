@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [name, setName] = useState('');
   const [vendor, setVendor] = useState('');
   const [buyer, setBuyer] = useState('');
+  const [buyerEmail, setBuyerEmail] = useState('');
 
   useEffect(() => {
     if (!profile) return;
@@ -33,8 +34,8 @@ export default function Dashboard() {
 
   async function submitNew() {
     if (!name.trim()) return;
-    await createProject(clientId, name.trim(), vendor.trim() || null, buyer.trim() || null);
-    setName(''); setVendor(''); setBuyer(''); setShowNew(false);
+    await createProject(clientId, name.trim(), vendor.trim() || null, buyer.trim() || null, buyerEmail.trim() || null);
+    setName(''); setVendor(''); setBuyer(''); setBuyerEmail(''); setShowNew(false);
     fetchProjects(clientId).then(setProjects);
   }
 
@@ -105,6 +106,11 @@ export default function Dashboard() {
               <label className="eyebrow">Buyer</label>
               <input type="text" placeholder="e.g. Lydia" value={buyer}
                      onChange={(e) => setBuyer(e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="eyebrow">Buyer email (for daily digests)</label>
+              <input type="email" placeholder="e.g. lydia@hamleys.com" value={buyerEmail}
+                     onChange={(e) => setBuyerEmail(e.target.value)} />
             </div>
             <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
               <button className="btn ghost" onClick={() => setShowNew(false)}>Cancel</button>

@@ -59,7 +59,7 @@ export async function fetchSkus(projectId) {
 export async function fetchSku(skuId) {
   const { data, error } = await supabase
     .from('skus')
-    .select('*, sku_stages(*, approver:done_by(full_name, email)), projects(name, vendor, buyer)')
+    .select('*, sku_stages(*, approver:done_by(full_name, email)), projects(name, vendor, buyer, buyer_email)')
     .eq('id', skuId).single();
   if (error) throw error;
   return data;
@@ -83,9 +83,10 @@ export async function fetchComments(skuId) {
 }
 
 // ---------- writes ----------
-export async function createProject(clientId, name, vendor, buyer) {
+export async function createProject(clientId, name, vendor, buyer, buyerEmail) {
   const { data, error } = await supabase
-    .from('projects').insert({ client_id: clientId, name, vendor, buyer })
+    .from('projects')
+    .insert({ client_id: clientId, name, vendor, buyer, buyer_email: buyerEmail || null })
     .select().single();
   if (error) throw error;
   return data;
@@ -96,16 +97,20 @@ export function effectiveBuyer(sku, projectBuyer) {
   return sku?.buyer_override || projectBuyer || null;
 }
 
-export async function updateProjectBuyer(projectId, buyer) {
+export async function updateProjectBuyer(projectId, buyer, buyerEmail) {
   const { error } = await supabase
-    .from('projects').update({ buyer: buyer || null }).eq('id', projectId);
+    .from('projects')
+    .update({ buyer: buyer || null, buyer_email: buyerEmail || null })
+    .eq('id', projectId);
   if (error) throw error;
 }
 
 // value null/empty clears the override → SKU goes back to inheriting the project buyer.
-export async function updateSkuBuyer(skuId, value) {
+export async function updateSkuBuyer(skuId, value, email) {
   const { error } = await supabase
-    .from('skus').update({ buyer_override: value || null }).eq('id', skuId);
+    .from('skus')
+    .update({ buyer_override: value || null, buyer_email_override: email || null })
+    .eq('id', skuId);
   if (error) throw error;
 }
 
@@ -245,6 +250,25 @@ export async function resolveSkuChanges(skuId) { // admin only (existing RLS enf
     .update({ changes_requested: false, changes_requested_at: null, changes_requested_by: null })
     .eq('id', skuId);
   if (error) throw error;
+}
+
+// ---------- email notifications ----------
+// The single live email trigger (everything else is the daily digest). The
+// final compliance item is identified by audience+label, the codebase's
+// checklist-identity convention.
+export const FINAL_COMPLIANCE_LABEL = 'Compliance approved — okay to proceed for print';
+
+// Fire-and-forget: never awaited by the UI, never throws — a notify failure
+// must not block or surface on the tick that triggered it. The server
+// re-verifies approval state and dedupes, so spurious calls are harmless.
+export function notifyComplianceApproved(skuId) {
+  authHeader()
+    .then((h) => fetch('/api/notify/compliance-approved', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...h },
+      body: JSON.stringify({ skuId }),
+    }))
+    .catch((e) => console.warn('compliance-approved notify failed:', e));
 }
 
 // ---------- compliance checklists ----------
