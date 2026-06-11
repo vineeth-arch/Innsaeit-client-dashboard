@@ -22,6 +22,7 @@ export default function ProjectView() {
   const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '' });
   const [editingBuyer, setEditingBuyer] = useState(false);
   const [buyerDraft, setBuyerDraft] = useState('');
+  const [err, setErr] = useState('');
 
   async function load() {
     const p = await fetchProject(projectId);
@@ -46,31 +47,47 @@ export default function ProjectView() {
   const canToggle = (tpl) => isAdmin || tpl.client_can_toggle;
 
   async function onToggle(stageRow, done) {
-    await toggleStage(stageRow, done);
-    setSkus(await fetchSkus(projectId));
+    setErr('');
+    try {
+      await toggleStage(stageRow, done);
+      setSkus(await fetchSkus(projectId));
+    } catch (e) {
+      setErr(e.message || 'Could not update stage.');
+    }
   }
 
   async function submitNew() {
     if (!f.product_name.trim()) return;
-    await createSku(project.client_id, projectId, {
-      ...f,
-      sub_brand: f.sub_brand === 'Other / none' ? null : f.sub_brand || null,
-      buyer_override: f.buyer_override.trim() || null,
-    });
-    setF({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '' });
-    setShowNew(false);
-    setSkus(await fetchSkus(projectId));
+    setErr('');
+    try {
+      await createSku(project.client_id, projectId, {
+        ...f,
+        sub_brand: f.sub_brand === 'Other / none' ? null : f.sub_brand || null,
+        buyer_override: f.buyer_override.trim() || null,
+      });
+      setF({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '' });
+      setShowNew(false);
+      setSkus(await fetchSkus(projectId));
+    } catch (e) {
+      setErr(e.message || 'Could not add SKU.');
+    }
   }
 
   function startEditBuyer() {
+    setErr('');
     setBuyerDraft(project.buyer || '');
     setEditingBuyer(true);
   }
 
   async function saveBuyer() {
-    await updateProjectBuyer(project.id, buyerDraft.trim() || null);
-    setEditingBuyer(false);
-    setProject(await fetchProject(projectId)); // refetch so inherited SKU rows update live
+    setErr('');
+    try {
+      await updateProjectBuyer(project.id, buyerDraft.trim() || null);
+      setEditingBuyer(false);
+      setProject(await fetchProject(projectId)); // refetch so inherited SKU rows update live
+    } catch (e) {
+      setErr(e.message || 'Could not save buyer.');
+    }
   }
 
   function doneCount(s) {
@@ -92,7 +109,8 @@ export default function ProjectView() {
               <input type="text" placeholder="Buyer name" value={buyerDraft} autoFocus
                      onChange={(e) => setBuyerDraft(e.target.value)} style={{ width: 200 }} />
               <button className="btn primary sm" onClick={saveBuyer}>Save</button>
-              <button className="btn ghost sm" onClick={() => setEditingBuyer(false)}>Cancel</button>
+              <button className="btn ghost sm" onClick={() => { setErr(''); setEditingBuyer(false); }}>Cancel</button>
+              {err && <p className="error-text">{err}</p>}
             </div>
           ) : (
             (project.buyer || isAdmin) && (
@@ -108,7 +126,7 @@ export default function ProjectView() {
         <div className="toolrow">
           <input type="text" placeholder="Search SKU, code, sub-brand…" value={filter}
                  onChange={(e) => setFilter(e.target.value)} style={{ width: 240 }} />
-          {isAdmin && <button className="btn primary" onClick={() => setShowNew(true)}>Add SKU</button>}
+          {isAdmin && <button className="btn primary" onClick={() => { setErr(''); setShowNew(true); }}>Add SKU</button>}
         </div>
       </div>
 
@@ -196,8 +214,9 @@ export default function ProjectView() {
                      style={{ width: 'auto' }} />
               <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Export SKU: needs both compliance gates</span>
             </label>
+            {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
             <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
-              <button className="btn ghost" onClick={() => setShowNew(false)}>Cancel</button>
+              <button className="btn ghost" onClick={() => { setErr(''); setShowNew(false); }}>Cancel</button>
               <button className="btn primary" onClick={submitNew} disabled={!f.product_name.trim()}>Add SKU</button>
             </div>
           </div>

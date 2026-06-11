@@ -24,6 +24,7 @@ export default function SkuDetail() {
   const [files, setFiles] = useState([]);
   const [comments, setComments] = useState([]);
   const [viewing, setViewing] = useState(null);
+  const [loadErr, setLoadErr] = useState('');
 
   // add-content state
   const [mode, setMode] = useState(null); // 'text' | 'link' | null
@@ -42,12 +43,20 @@ export default function SkuDetail() {
   const [buyerDraft, setBuyerDraft] = useState('');
 
   async function load() {
-    const s = await fetchSku(skuId);
-    setSku(s);
-    if (s) {
-      setTemplates(await fetchStageTemplates(s.client_id));
-      setFiles(await fetchFiles(skuId));
-      setComments(await fetchComments(skuId));
+    setLoadErr('');
+    try {
+      const s = await fetchSku(skuId);
+      setSku(s);
+      if (s) {
+        const [t, f, c] = await Promise.all([
+          fetchStageTemplates(s.client_id),
+          fetchFiles(skuId),
+          fetchComments(skuId),
+        ]);
+        setTemplates(t); setFiles(f); setComments(c);
+      }
+    } catch (e) {
+      setLoadErr(e.message || 'Could not load this SKU.');
     }
   }
   useEffect(() => { load(); }, [skuId]);
@@ -134,6 +143,7 @@ export default function SkuDetail() {
     setComments(await fetchComments(skuId));
   }
 
+  if (loadErr) return <main className="page"><p className="error-text">Couldn't load this SKU: {loadErr}</p></main>;
   if (!sku) return <main className="page"><p className="eyebrow">Loading…</p></main>;
 
   return (

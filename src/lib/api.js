@@ -57,10 +57,11 @@ export async function fetchSkus(projectId) {
 }
 
 export async function fetchSku(skuId) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('skus')
     .select('*, sku_stages(*), projects(name, vendor, buyer)')
     .eq('id', skuId).single();
+  if (error) throw error;
   return data;
 }
 
