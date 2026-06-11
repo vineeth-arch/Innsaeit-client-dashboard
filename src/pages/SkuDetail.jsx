@@ -3,17 +3,29 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.jsx';
 import FileViewer from '../components/FileViewer.jsx';
+import ChecklistCard from '../components/ChecklistCard.jsx';
 import {
   fetchSku, fetchStageTemplates, fetchFiles, fetchComments,
   toggleStage, addTextBrief, addExternalLink, addComment, deleteComment,
   uploadToOneDrive, registerUploadedFile,
   updateSkuBuyer, effectiveBuyer,
   requestSkuChanges, resolveSkuChanges,
+  fetchChecklistItems, fetchSkuChecker, fetchClientUsers,
+  toggleChecklistItem, generateSkuChecklist, addChecklistItem, deleteChecklistItem,
+  updateSkuPowerType, updateSkuComplianceUser, updateSkuHasIm, updateSkuImDone,
 } from '../lib/api.js';
 
 const PINK_STAGES = new Set([
   'final_approved_for_print', 'sent_to_vendor', 'mockup_received', 'in_production',
 ]);
+
+const POWER_TYPES = [
+  ['unknown', 'Unknown'],
+  ['battery', 'Battery'],
+  ['rechargeable_usb', 'Rechargeable (USB)'],
+  ['non_electronic', 'Non-electronic'],
+  ['ride_on', 'Ride-on'],
+];
 
 const KIND_LABEL = {
   brief_text: 'Brief (text)', brief_file: 'Brief', reference: 'Reference',
@@ -53,18 +65,27 @@ export default function SkuDetail() {
   const [reqErr, setReqErr] = useState('');
   const [reqBusy, setReqBusy] = useState(false);
 
+  // compliance checklists state
+  const [checklist, setChecklist] = useState([]);
+  const [checker, setChecker] = useState(null);
+  const [clientUsers, setClientUsers] = useState([]);
+
   async function load() {
     setLoadErr('');
     try {
       const s = await fetchSku(skuId);
       setSku(s);
       if (s) {
-        const [t, f, c] = await Promise.all([
+        const [t, f, c, items, chk, users] = await Promise.all([
           fetchStageTemplates(s.client_id),
           fetchFiles(skuId),
           fetchComments(skuId),
+          fetchChecklistItems(skuId),
+          fetchSkuChecker(skuId),
+          fetchClientUsers(s.client_id), // RLS-empty for client users; harmless
         ]);
         setTemplates(t); setFiles(f); setComments(c);
+        setChecklist(items); setChecker(chk); setClientUsers(users);
       }
     } catch (e) {
       setLoadErr(e.message || 'Could not load this SKU.');
@@ -169,6 +190,41 @@ export default function SkuDetail() {
     } catch (e) { setErr(e.message); }
   }
 
+  // ----- compliance checklist handlers -----
+  async function onPowerType(value) {
+    try { await updateSkuPowerType(sku.id, value); load(); } catch (e) { setErr(e.message); }
+  }
+
+  async function onChecker(userId) {
+    try { await updateSkuComplianceUser(sku.id, userId || null); load(); } catch (e) { setErr(e.message); }
+  }
+
+  async function onHasIm(checked) {
+    try { await updateSkuHasIm(sku.id, checked); load(); } catch (e) { setErr(e.message); }
+  }
+
+  async function onImDone(checked) {
+    try { await updateSkuImDone(sku.id, checked); load(); } catch (e) { setErr(e.message); }
+  }
+
+  async function onLoadChecklist() {
+    try { await generateSkuChecklist(sku.id); load(); } catch (e) { setErr(e.message); }
+  }
+
+  async function onToggleItem(item) {
+    try { await toggleChecklistItem(item.id, !item.checked); load(); } catch (e) { setErr(e.message); }
+  }
+
+  async function onAddItem(audience, label) {
+    const positions = checklist.filter((i) => i.audience === audience).map((i) => i.position);
+    const nextPos = positions.length ? Math.max(...positions) + 1 : 1;
+    try { await addChecklistItem(sku.client_id, sku.id, audience, label, nextPos); load(); } catch (e) { setErr(e.message); }
+  }
+
+  async function onDeleteItem(item) {
+    try { await deleteChecklistItem(item.id); load(); } catch (e) { setErr(e.message); }
+  }
+
   async function onDeleteComment(id) {
     try {
       await deleteComment(id);
@@ -185,6 +241,13 @@ export default function SkuDetail() {
 
   if (loadErr) return <main className="page"><p className="error-text">Couldn't load this SKU: {loadErr}</p></main>;
   if (!sku) return <main className="page"><p className="eyebrow">Loading…</p></main>;
+
+  const adminItems = checklist.filter((i) => i.audience === 'admin');
+  const complianceItems = checklist.filter((i) => i.audience === 'compliance');
+  const isChecker = !!profile?.id && sku.compliance_user_id === profile.id;
+  const powerHint = isAdmin && sku.power_type === 'unknown'
+    ? 'Power type not set — only general items loaded. Set a power type above to load type-specific checks.'
+    : null;
 
   return (
     <main className="page">
@@ -236,6 +299,39 @@ export default function SkuDetail() {
               </button>
             )}
           </div>
+          {isAdmin && (
+            <div className="toolrow" style={{ marginTop: 10 }}>
+              <label className="eyebrow" htmlFor="power-type">Power type</label>
+              <select id="power-type" value={sku.power_type} onChange={(e) => onPowerType(e.target.value)}
+                      style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }}>
+                {POWER_TYPES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+              </select>
+              <label className="eyebrow" htmlFor="compliance-checker">Compliance checker</label>
+              <select id="compliance-checker" value={sku.compliance_user_id || ''} onChange={(e) => onChecker(e.target.value)}
+                      style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }}>
+                <option value="">— none —</option>
+                {clientUsers.map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
+              </select>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+                <input type="checkbox" checked={sku.has_im} style={{ width: 'auto' }}
+                       onChange={(e) => onHasIm(e.target.checked)} />
+                <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Has Instruction Manual</span>
+              </label>
+              {sku.has_im && (
+                <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={sku.im_done} style={{ width: 'auto' }}
+                         onChange={(e) => onImDone(e.target.checked)} />
+                  <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>IM artwork done</span>
+                  {sku.im_done && sku.im_done_at && (
+                    <span className="stamp" style={{ color: 'var(--text-faint)', fontSize: 11.5 }}>
+                      {new Date(sku.im_done_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    </span>
+                  )}
+                </label>
+              )}
+              <button className="btn ghost sm" onClick={onLoadChecklist}>Load checklist</button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -353,6 +449,7 @@ export default function SkuDetail() {
           </div>
         </div>
 
+        <div>
         {/* ---------- Stage checklist ---------- */}
         <div className="card">
           <span className="eyebrow">Pipeline</span>
@@ -397,6 +494,41 @@ export default function SkuDetail() {
               All other stages update automatically as work progresses.
             </p>
           )}
+        </div>
+
+        {/* ---------- Internal (admin) checklist ---------- */}
+        {isAdmin && (
+          <ChecklistCard
+            accent="amber"
+            title="Internal checklist"
+            chip={<span className="badge amber">INTERNAL — only you see this</span>}
+            items={adminItems}
+            canTick
+            canEdit
+            onToggle={onToggleItem}
+            onAdd={(label) => onAddItem('admin', label)}
+            onDelete={onDeleteItem}
+            hint={powerHint}
+          />
+        )}
+
+        {/* ---------- Compliance checklist ---------- */}
+        {(isAdmin || isChecker) && (
+          <ChecklistCard
+            accent="mint"
+            title="Compliance checklist"
+            chip={checker
+              ? <span className="badge mint">Checker: {checker.full_name || checker.email}</span>
+              : <span className="badge">No checker assigned</span>}
+            items={complianceItems}
+            canTick={isAdmin || isChecker}
+            canEdit={isAdmin}
+            onToggle={onToggleItem}
+            onAdd={(label) => onAddItem('compliance', label)}
+            onDelete={onDeleteItem}
+            hint={powerHint}
+          />
+        )}
         </div>
       </div>
 

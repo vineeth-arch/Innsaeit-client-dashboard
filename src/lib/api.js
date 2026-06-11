@@ -213,6 +213,109 @@ export async function resolveSkuChanges(skuId) { // admin only (existing RLS enf
   if (error) throw error;
 }
 
+// ---------- compliance checklists ----------
+// Client users of a tenant, for the "Compliance checker" select. Admin-only in
+// practice: profiles RLS hides other users' rows from clients, so they get [].
+export async function fetchClientUsers(clientId) {
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, full_name, email')
+    .eq('client_id', clientId)
+    .eq('role', 'client')
+    .order('full_name');
+  return data || [];
+}
+
+// The assigned checker's profile for a SKU (fetchSku stays untouched).
+// Admin sees any profile; the assigned client's join target is their own
+// profile row, which profiles RLS permits; everyone else gets null.
+export async function fetchSkuChecker(skuId) {
+  const { data } = await supabase
+    .from('skus')
+    .select('compliance_user:compliance_user_id(full_name, email)')
+    .eq('id', skuId).single();
+  return data?.compliance_user || null;
+}
+
+// RLS scopes visibility: admins get both audiences, the assigned checker gets
+// compliance items only, all other clients get nothing.
+export async function fetchChecklistItems(skuId) {
+  const { data } = await supabase
+    .from('sku_checklist_items')
+    .select('*, checker:checked_by(full_name, email)')
+    .eq('sku_id', skuId)
+    .order('position')
+    .order('created_at');
+  return data || [];
+}
+
+// Tick/untick via RPC — the only client write path on sku_checklist_items
+// (stamps/clears checked_at + checked_by server-side).
+export async function toggleChecklistItem(itemId, checked) {
+  const { error } = await supabase.rpc('toggle_checklist_item', {
+    p_item_id: itemId, p_checked: checked,
+  });
+  if (error) throw error;
+}
+
+// Copies missing template items for the SKU's current power_type / has_im.
+// Idempotent: never duplicates, never touches checked items. Admin only.
+export async function generateSkuChecklist(skuId) {
+  const { error } = await supabase.rpc('generate_sku_checklist', { p_sku_id: skuId });
+  if (error) throw error;
+}
+
+export async function addChecklistItem(clientId, skuId, audience, label, position) { // admin only via RLS
+  const { error } = await supabase.from('sku_checklist_items').insert({
+    client_id: clientId, sku_id: skuId, audience, label, position,
+  });
+  if (error) throw error;
+}
+
+export async function deleteChecklistItem(itemId) { // admin only via RLS
+  const { error } = await supabase.from('sku_checklist_items').delete().eq('id', itemId);
+  if (error) throw error;
+}
+
+export async function updateSkuPowerType(skuId, powerType) { // admin only via RLS
+  const { error } = await supabase.from('skus').update({ power_type: powerType }).eq('id', skuId);
+  if (error) throw error;
+  await generateSkuChecklist(skuId); // regenerate for the new power type
+}
+
+// userId null/empty clears the assignment.
+export async function updateSkuComplianceUser(skuId, userId) { // admin only via RLS
+  const { error } = await supabase
+    .from('skus').update({ compliance_user_id: userId || null }).eq('id', skuId);
+  if (error) throw error;
+}
+
+export async function updateSkuHasIm(skuId, hasIm) { // admin only via RLS
+  const { error } = await supabase.from('skus').update({ has_im: hasIm }).eq('id', skuId);
+  if (error) throw error;
+  await generateSkuChecklist(skuId); // add or prune the has_im checklist item
+}
+
+export async function updateSkuImDone(skuId, done) { // admin only via RLS
+  const { error } = await supabase
+    .from('skus')
+    .update({ im_done: done, im_done_at: done ? new Date().toISOString() : null })
+    .eq('id', skuId);
+  if (error) throw error;
+}
+
+// Compliance progress for project rows (fetchSkus stays untouched). RLS scopes
+// rows: clients only see compliance items on SKUs assigned to them.
+export async function fetchProjectChecklistSummary(skuIds) {
+  if (!skuIds?.length) return [];
+  const { data } = await supabase
+    .from('sku_checklist_items')
+    .select('sku_id, checked')
+    .eq('audience', 'compliance')
+    .in('sku_id', skuIds);
+  return data || [];
+}
+
 // ---------- OneDrive upload (chunked, direct to Microsoft) ----------
 const CHUNK = 10 * 1024 * 1024; // 10 MB chunks, multiple of 320 KiB
 

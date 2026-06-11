@@ -407,3 +407,17 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 .activity-row:hover { color: var(--text); }
 .activity-row .activity-text { flex: 1; min-width: 0; }
 .activity-row .activity-when { flex: none; font-family: var(--font-label); font-size: 11px; color: var(--text-faint); }
+
+/* ---------- Compliance checklists ---------- */
+.checklist-card { margin-top: 20px; }
+.checklist-card.amber { border-left: 3px solid var(--amber); }
+.checklist-card.mint  { border-left: 3px solid var(--mint); }
+.checklist-card.amber .stage-list .check.done { background: var(--amber); border-color: var(--amber); }
+.checklist-progress { font-family: var(--font-label); font-size: 11px; color: var(--text-faint); flex: none; }
+.checklist-hint { color: var(--text-faint); font-size: 12px; margin: 8px 0 2px; }
+.checklist-add { display: flex; gap: 8px; margin-top: 12px; }
+.checklist-add input { flex: 1; padding: 6px 10px; font-size: 13px; }
+
+/* Filled IM badge: manual artwork done */
+.badge.mint-solid { background: var(--mint); border-color: var(--mint); color: var(--ink-deep); }
+:root[data-theme="light"] .badge.mint-solid { color: #14004A; }

@@ -369,3 +369,214 @@ begin
          changes_requested_by = auth.uid()
    where id = p_sku_id;
 end; $$;
+
+-- ===== Migration: Two-track compliance checklists + power type + IM tracking =====
+-- Run this whole block in the Supabase SQL Editor against the live project.
+-- Additive only: no existing table, policy, trigger or function is modified.
+
+-- 1. New SKU columns. They inherit existing skus RLS (admin write, client read).
+alter table public.skus add column if not exists power_type text not null default 'unknown'
+  check (power_type in ('unknown','battery','rechargeable_usb','non_electronic','ride_on'));
+alter table public.skus add column if not exists compliance_user_id uuid references public.profiles(id);
+alter table public.skus add column if not exists has_im boolean not null default false;
+alter table public.skus add column if not exists im_done boolean not null default false;
+alter table public.skus add column if not exists im_done_at timestamptz;
+
+-- 2. Checklist templates (per tenant). Admin-only: clients get zero policies here.
+--    NOTE: unique key includes condition — the same label can legitimately appear
+--    under two conditions (e.g. the bin-symbol item for battery AND rechargeable_usb).
+create table public.checklist_templates (
+  id         uuid primary key default gen_random_uuid(),
+  client_id  uuid not null references public.clients(id) on delete cascade,
+  audience   text not null check (audience in ('admin','compliance')),
+  label      text not null,
+  condition  text not null default 'all'
+              check (condition in ('all','battery','rechargeable_usb','non_electronic','ride_on','has_im')),
+  position   int not null,
+  unique (client_id, audience, condition, label)
+);
+
+-- 3. Per-SKU checklist items (copied from templates; admins may add custom rows).
+create table public.sku_checklist_items (
+  id          uuid primary key default gen_random_uuid(),
+  sku_id      uuid not null references public.skus(id) on delete cascade,
+  client_id   uuid not null references public.clients(id),
+  audience    text not null check (audience in ('admin','compliance')),
+  label       text not null,
+  checked     boolean not null default false,
+  checked_at  timestamptz,
+  checked_by  uuid references public.profiles(id),
+  position    int not null default 0,
+  created_at  timestamptz not null default now()
+);
+create index sku_checklist_items_sku_idx on public.sku_checklist_items (sku_id);
+
+-- 4. RLS.
+alter table public.checklist_templates enable row level security;
+alter table public.sku_checklist_items enable row level security;
+
+create policy "admin all checklist_templates" on public.checklist_templates
+  for all using (public.is_admin()) with check (public.is_admin());
+-- Deliberately NO client policy on checklist_templates: the internal checklist
+-- definitions are never readable by client users.
+
+create policy "admin all sku_checklist_items" on public.sku_checklist_items
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- The ONE assigned compliance checker reads compliance-audience items on their
+-- assigned SKUs. audience='admin' rows are invisible to every client, as are
+-- compliance rows on SKUs assigned to someone else (or to nobody).
+create policy "assigned checker reads compliance items" on public.sku_checklist_items
+  for select using (
+    audience = 'compliance'
+    and client_id = public.my_client_id()
+    and exists (
+      select 1 from public.skus s
+      where s.id = sku_checklist_items.sku_id
+        and s.compliance_user_id = auth.uid()
+    )
+  );
+-- No client insert/update/delete policies: ticking goes through the RPC below
+-- (RLS cannot restrict an UPDATE to specific columns — same reasoning as
+-- request_sku_changes above).
+
+-- 5. Idempotent item generation — single source of truth for all three paths:
+--    SKU creation (trigger below), power_type / has_im changes, and the
+--    "Load checklist" button. Copies templates where condition='all', or
+--    condition = the SKU's power_type ('unknown' matches nothing extra), or
+--    condition='has_im' when the SKU has an instruction manual.
+--    Idempotency key: (sku_id, audience, label) — re-running only adds missing
+--    items and never touches checked ones. Stale UNCHECKED template items whose
+--    condition no longer applies are pruned; checked items and admin-added
+--    custom items (labels with no template) always survive.
+create or replace function public.generate_sku_checklist(p_sku_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_sku public.skus%rowtype;
+begin
+  select * into v_sku from public.skus where id = p_sku_id;
+  if v_sku.id is null then
+    raise exception 'sku not found';
+  end if;
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+
+  delete from public.sku_checklist_items i
+   where i.sku_id = p_sku_id
+     and i.checked = false
+     and exists (
+       select 1 from public.checklist_templates t
+        where t.client_id = v_sku.client_id
+          and t.audience  = i.audience
+          and t.label     = i.label)
+     and not exists (
+       select 1 from public.checklist_templates t
+        where t.client_id = v_sku.client_id
+          and t.audience  = i.audience
+          and t.label     = i.label
+          and (t.condition = 'all'
+               or t.condition = v_sku.power_type
+               or (t.condition = 'has_im' and v_sku.has_im)));
+
+  insert into public.sku_checklist_items (sku_id, client_id, audience, label, position)
+  select p_sku_id, v_sku.client_id, t.audience, t.label, t.position
+  from public.checklist_templates t
+  where t.client_id = v_sku.client_id
+    and (t.condition = 'all'
+         or t.condition = v_sku.power_type
+         or (t.condition = 'has_im' and v_sku.has_im))
+    and not exists (
+      select 1 from public.sku_checklist_items i
+       where i.sku_id   = p_sku_id
+         and i.audience = t.audience
+         and i.label    = t.label);
+end; $$;
+
+-- 6. Auto-generate checklist items when a SKU is created (additive trigger;
+--    on_sku_created / create_sku_stages are untouched). SKU inserts are
+--    admin-only via RLS, so the is_admin() guard inside always passes.
+create or replace function public.create_sku_checklist()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public.generate_sku_checklist(new.id);
+  return new;
+end; $$;
+
+create trigger on_sku_created_checklist
+  after insert on public.skus
+  for each row execute function public.create_sku_checklist();
+
+-- 7. Tick/untick RPC — the only client write path on sku_checklist_items.
+--    Only ever sets checked / checked_at / checked_by. Admins can tick both
+--    lists; the assigned checker can tick compliance items on their SKUs only.
+create or replace function public.toggle_checklist_item(p_item_id uuid, p_checked boolean)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_audience text;
+  v_checker  uuid;
+begin
+  select i.audience, s.compliance_user_id into v_audience, v_checker
+  from public.sku_checklist_items i
+  join public.skus s on s.id = i.sku_id
+  where i.id = p_item_id;
+  if v_audience is null then
+    raise exception 'item not found';
+  end if;
+  if not (public.is_admin()
+          or (v_audience = 'compliance' and v_checker = auth.uid())) then
+    raise exception 'not authorized';
+  end if;
+  update public.sku_checklist_items
+     set checked    = p_checked,
+         checked_at = case when p_checked then now() else null end,
+         checked_by = case when p_checked then auth.uid() else null end
+   where id = p_item_id;
+end; $$;
+
+-- 8. SEED: Hamleys ADMIN checklist (the designer's pre-send routine).
+insert into public.checklist_templates (client_id, audience, condition, label, position)
+select c.id, 'admin', t.condition, t.label, t.position
+from public.clients c,
+(values
+  ('all',              'Product name & callouts match approved brief',                              1),
+  ('all',              'Sub-brand logo & lockup correct',                                           2),
+  ('all',              'Hamleys SKU & vendor item code on dieline correct',                         3),
+  ('all',              'Age grading present in full format ("X+ years" or range) and value confirmed', 4),
+  ('all',              'MRP / importer / manufacturer block complete',                              5),
+  ('all',              'Barcode present, correct number, scannable size',                           6),
+  ('all',              'Net/pack contents list matches product',                                    7),
+  ('all',              'Artwork resolution print-ready (no pixelated images)',                      8),
+  ('all',              'Dieline & dimensions match vendor die',                                     9),
+  ('battery',          'Battery type, count & specification stated',                               10),
+  ('battery',          'Battery installation diagram included (or written description if internal)', 11),
+  ('rechargeable_usb', '"USB cable included/not included" stated',                                 12),
+  ('rechargeable_usb', 'USB charging caution + charging instructions on artwork',                  13),
+  ('battery',          'Crossed-out bin symbol WITH block underneath, min 7mm height incl. the X', 14),
+  ('rechargeable_usb', 'Crossed-out bin symbol WITH block underneath, min 7mm height incl. the X', 15),
+  ('non_electronic',   'Crossed-out bin symbol REMOVED (non-electronic product)',                  16),
+  ('non_electronic',   'Recycle symbol added',                                                     17),
+  ('ride_on',          'Special usage/safety warning for ride-ons included',                       18),
+  ('ride_on',          'BIS third-party testing confirmed for CKD route',                          19),
+  ('has_im',           'IM artwork complete & included in print files',                            20)
+) as t(condition, label, position)
+where c.slug = 'hamleys';
+
+-- 9. SEED: Hamleys COMPLIANCE checklist (the checker's review).
+insert into public.checklist_templates (client_id, audience, condition, label, position)
+select c.id, 'compliance', t.condition, t.label, t.position
+from public.clients c,
+(values
+  ('all',              'Age grading format & value correct',                          1),
+  ('all',              'Warning & safety text complete (BIS/EN71 as applicable)',     2),
+  ('all',              'MRP / importer / manufacturer details verified',              3),
+  ('all',              'Artwork legible at print size',                               4),
+  ('battery',          'Battery diagram, instruction & specification verified',       5),
+  ('rechargeable_usb', 'USB charging caution & cable-included statement verified',    6),
+  ('battery',          'Bin symbol present, ≥7mm with block',                         7),
+  ('rechargeable_usb', 'Bin symbol present, ≥7mm with block',                         8),
+  ('non_electronic',   'No bin symbol present; recycle symbol present',               9),
+  ('ride_on',          'Ride-on usage warning verified',                             10),
+  ('all',              'Compliance approved — okay to proceed for print',            11)
+) as t(condition, label, position)
+where c.slug = 'hamleys';

@@ -5,7 +5,7 @@ import { useAuth } from '../auth/useAuth.jsx';
 import StageRail from '../components/StageRail.jsx';
 import {
   fetchProject, fetchSkus, fetchStageTemplates, createSku, toggleStage,
-  updateProjectBuyer, effectiveBuyer,
+  updateProjectBuyer, effectiveBuyer, fetchProjectChecklistSummary,
 } from '../lib/api.js';
 import { buildProjectCsv, downloadCsv, projectCsvFilename, buildProjectSummary } from '../lib/export.js';
 
@@ -20,18 +20,33 @@ export default function ProjectView() {
   const [templates, setTemplates] = useState([]);
   const [filter, setFilter] = useState('');
   const [showNew, setShowNew] = useState(false);
-  const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '' });
+  const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', has_im: false });
   const [editingBuyer, setEditingBuyer] = useState(false);
   const [buyerDraft, setBuyerDraft] = useState('');
   const [copied, setCopied] = useState(false);
   const [err, setErr] = useState('');
+  const [checklistSummary, setChecklistSummary] = useState({});
+
+  // { sku_id: { done, total } } for the compliance checklist chip. RLS scopes
+  // rows, so clients only ever get counts for SKUs assigned to them.
+  async function loadChecklistSummary(list) {
+    const rows = await fetchProjectChecklistSummary((list || []).map((s) => s.id));
+    setChecklistSummary(rows.reduce((acc, r) => {
+      const c = acc[r.sku_id] || (acc[r.sku_id] = { done: 0, total: 0 });
+      c.total += 1;
+      if (r.checked) c.done += 1;
+      return acc;
+    }, {}));
+  }
 
   async function load() {
     const p = await fetchProject(projectId);
     setProject(p);
     if (p) {
       setTemplates(await fetchStageTemplates(p.client_id));
-      setSkus(await fetchSkus(projectId));
+      const list = await fetchSkus(projectId);
+      setSkus(list);
+      loadChecklistSummary(list);
     }
   }
   useEffect(() => { load(); }, [projectId]);
@@ -67,9 +82,11 @@ export default function ProjectView() {
         sub_brand: f.sub_brand === 'Other / none' ? null : f.sub_brand || null,
         buyer_override: f.buyer_override.trim() || null,
       });
-      setF({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '' });
+      setF({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', has_im: false });
       setShowNew(false);
-      setSkus(await fetchSkus(projectId));
+      const list = await fetchSkus(projectId);
+      setSkus(list);
+      loadChecklistSummary(list);
     } catch (e) {
       setErr(e.message || 'Could not add SKU.');
     }
@@ -174,6 +191,18 @@ export default function ProjectView() {
               <div style={{ marginTop: 6 }}>
                 {s.sub_brand && <span className="badge mint">{s.sub_brand}</span>}
                 <span className="badge">{s.compliance_owner === 'internal' ? 'Compliance: Santosh' : 'Compliance: Hamleys HK/UK'}</span>
+                {s.has_im && (
+                  <span className={'badge' + (s.im_done ? ' mint-solid' : '')}
+                        title={s.im_done ? 'Instruction manual artwork done' : 'Instruction manual artwork pending'}>
+                    IM
+                  </span>
+                )}
+                {(() => {
+                  const cs = checklistSummary[s.id];
+                  return cs && cs.total > 0 && cs.done === cs.total
+                    ? <span className="badge mint">✓ Compliance</span>
+                    : null;
+                })()}
                 {s.second_gate && <span className="badge">2nd gate</span>}
                 {s.changes_requested && <span className="badge amber">Changes requested</span>}
                 {effectiveBuyer(s, project.buyer) && (
@@ -231,11 +260,17 @@ export default function ProjectView() {
               <input type="text" placeholder="Leave blank to inherit" value={f.buyer_override}
                      onChange={(e) => setF({ ...f, buyer_override: e.target.value })} />
             </div>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, cursor: 'pointer' }}>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
               <input type="checkbox" checked={f.second_gate}
                      onChange={(e) => setF({ ...f, second_gate: e.target.checked })}
                      style={{ width: 'auto' }} />
               <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Export SKU: needs both compliance gates</span>
+            </label>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, cursor: 'pointer' }}>
+              <input type="checkbox" checked={f.has_im}
+                     onChange={(e) => setF({ ...f, has_im: e.target.checked })}
+                     style={{ width: 'auto' }} />
+              <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Has Instruction Manual</span>
             </label>
             {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
             <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
