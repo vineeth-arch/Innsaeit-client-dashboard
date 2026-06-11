@@ -30,7 +30,7 @@ export default function Login() {
   return (
     <div className="login-wrap">
       <div className="card login-card">
-        <img className="logo" src="/Logo_wordmark_teal%20full.svg" alt="Design Innsaeit"
+        <img className="logo" src="/Horizontal_Wordmark_logo.svg" alt="Innsaeit"
              onError={(e) => { e.currentTarget.style.display = 'none'; }} />
         <h1 className="display">Artwork Tracker</h1>
         <p className="sub">Sign in to view the live status of every SKU.</p>

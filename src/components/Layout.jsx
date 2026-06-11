@@ -24,7 +24,7 @@ export default function Layout() {
     <div className="shell">
       <header className="topbar">
         <Link to="/" className="brand" aria-label="Innsaeit Tracker home">
-          <img src="/Logo_wordmark_teal%20full.svg" alt="Design Innsaeit"
+          <img src="/Horizontal_Wordmark_logo.svg" alt="Innsaeit"
                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
         </Link>
         {client && <span className="tenant">{client.theme?.label ?? client.name}</span>}
