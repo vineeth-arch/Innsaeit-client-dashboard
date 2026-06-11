@@ -2,9 +2,10 @@
 // Ported from MagicUI's Ripple — concentric bordered circles that breathe
 // slowly behind the login card. Plain JSX (no cn/Tailwind); restyled with our
 // tokens (indigo borders, a faint mint tint on the innermost ring) and a
-// bottom fade mask. The animation rests at scale(1), so when
-// prefers-reduced-motion freezes it (global rule in styles.css) it settles into
-// clean static concentric rings.
+// bottom fade mask. Each ring's base opacity is passed as --ring-opacity so
+// the keyframes can pulse brightness around it. The animation rests at
+// scale(1) / base opacity, so when prefers-reduced-motion freezes it (global
+// rule in styles.css) it settles into clean static concentric rings.
 export default function Ripple({ mainSize = 210, count = 8 }) {
   return (
     <div className="ripple" aria-hidden="true">
@@ -21,7 +22,7 @@ export default function Ripple({ mainSize = 210, count = 8 }) {
             style={{
               width: size,
               height: size,
-              opacity,
+              '--ring-opacity': opacity,
               borderColor,
               animationDelay: `${i * 0.18}s`,
             }}

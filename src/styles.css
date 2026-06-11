@@ -13,6 +13,9 @@
   --header-text-dim:   #9D95C7;
   --header-text-faint: #6A6299;
   --header-line:       rgba(157, 149, 199, 0.18);
+  /* topbar glass: stays dark indigo in both themes, translucent so content
+     blurs underneath it */
+  --header-glass:      rgba(13, 0, 53, 0.72);
 
   /* accent colours stay constant across themes */
   --mint:    #00FFCF;
@@ -36,7 +39,10 @@
 /* ---------- dark theme (default) ---------- */
 :root[data-theme="dark"] {
   --bg-body:      #0D0035;
+  /* top-center indigo glow fading into --ink-deep at the edges, over the two
+     original corner glows */
   --bg-body-gradient:
+    radial-gradient(1000px 620px at 50% -12%, rgba(78, 26, 200, 0.42), transparent 62%),
     radial-gradient(1200px 600px at 85% -10%, rgba(44, 0, 152, 0.45), transparent 60%),
     radial-gradient(900px 500px at -10% 110%, rgba(44, 0, 152, 0.25), transparent 60%);
   --bg-card:      rgba(27, 0, 97, 0.35);
@@ -57,16 +63,30 @@
   --mint-dim:     rgba(0, 255, 207, 0.14);
 
   --link-color:   var(--mint);
+
+  /* glass surfaces */
+  --glass-bg:        rgba(27, 0, 97, 0.55);
+  --glass-bg-strong: rgba(27, 0, 97, 0.68);   /* hover + modals */
+  --glass-bg-dim:    rgba(27, 0, 97, 0.38);   /* sku-row baseline, no blur */
+  --glass-border:    rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
+  --glass-shadow:    0 12px 32px rgba(6, 0, 26, 0.35);
+  --card-opaque:     #140048;   /* glass-bg flattened over #0D0035 */
+  --noise-opacity:   0.04;
 }
 
 /* ---------- light theme ---------- */
 :root[data-theme="light"] {
   --bg-body:      #F5F3FB;
-  --bg-body-gradient: none;
+  /* soft warm top glow + gentle indigo vignette so glass panels have depth
+     to read against */
+  --bg-body-gradient:
+    radial-gradient(1100px 600px at 50% -10%, rgba(255, 252, 243, 0.95), transparent 60%),
+    radial-gradient(135% 135% at 50% 45%, transparent 58%, rgba(44, 0, 152, 0.05) 86%, rgba(20, 0, 74, 0.10) 100%);
   --bg-card:      #FFFFFF;
   --bg-card-dim:  #FAFAFE;
   --bg-input:     #FFFFFF;
-  --bg-file:      #F4F3FA;
+  --bg-file:      rgba(244, 243, 250, 0.6);
   --bg-overlay:   rgba(20, 0, 74, 0.72);
   --bg-progress:  rgba(220, 215, 245, 0.8);
 
@@ -81,6 +101,16 @@
   --mint-dim:     rgba(0, 255, 207, 0.18);
 
   --link-color:   var(--indigo);
+
+  /* glass surfaces */
+  --glass-bg:        rgba(255, 255, 255, 0.60);
+  --glass-bg-strong: rgba(255, 255, 255, 0.80);
+  --glass-bg-dim:    rgba(255, 255, 255, 0.50);
+  --glass-border:    rgba(255, 255, 255, 0.45);
+  --glass-highlight: rgba(255, 255, 255, 0.60);
+  --glass-shadow:    0 12px 32px rgba(44, 0, 152, 0.10);
+  --card-opaque:     #FFFFFF;
+  --noise-opacity:   0.025;
 }
 
 /* ============================================================
@@ -99,6 +129,21 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+/* film grain — tileable SVG turbulence, inline data-URI (no asset, no network).
+   Paint stack: body gradient → .topo-bg (z -2) → this noise (z -1) → content. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--noise-opacity, 0.04);
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  background-repeat: repeat;
 }
 
 a { color: var(--link-color); text-decoration: none; }
@@ -139,8 +184,10 @@ h1, h2 {
   display: flex; align-items: center; gap: 16px;
   padding: 14px 28px;
   border-bottom: 1px solid var(--header-line);
-  background: var(--header-bg);
-  backdrop-filter: blur(12px);
+  background: var(--header-glass);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+          backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px rgba(6, 0, 26, 0.20);
   position: sticky; top: 0; z-index: 40;
   color: var(--header-text);
 }
@@ -165,14 +212,19 @@ h1, h2 {
 .page-head .sub { color: var(--text-dim); margin-top: 6px; max-width: 60ch; }
 
 /* ---------- cards & surfaces ---------- */
+/* Frosted glass: blur stays on container panels only — rows inside them
+   (sku-row, stage-list li, comment, file-row) are alpha-only, never blurred. */
 .card {
-  background: var(--bg-card);
-  border: 1px solid var(--line);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+          backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
   padding: 20px;
+  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--glass-shadow);
 }
-.card.clickable { cursor: pointer; transition: border-color 140ms ease, transform 140ms ease; }
-.card.clickable:hover { border-color: rgba(0, 255, 207, 0.45); transform: translateY(-2px); }
+.card.clickable { cursor: pointer; transition: border-color 140ms ease, transform 140ms ease, background 140ms ease; }
+.card.clickable:hover { border-color: rgba(0, 255, 207, 0.45); background: var(--glass-bg-strong); transform: translateY(-2px); }
 
 .grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 
@@ -288,13 +340,13 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
   padding: 24px 20px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  background: var(--bg-card-dim);
+  background: var(--glass-bg-dim);
   margin-bottom: 10px;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease;
 }
-.sku-row:hover { border-color: rgba(0, 255, 207, 0.45); background: var(--bg-card); }
-.sku-row:focus-visible { border-color: rgba(0, 255, 207, 0.45); background: var(--bg-card); outline: none; }
+.sku-row:hover { border-color: rgba(0, 255, 207, 0.45); background: var(--glass-bg); }
+.sku-row:focus-visible { border-color: rgba(0, 255, 207, 0.45); background: var(--glass-bg); outline: none; }
 .sku-row .name { font-weight: 600; }
 .sku-row .codes { color: var(--text-faint); font-size: 12px; font-family: var(--font-label); margin-top: 2px; }
 .sku-row .meta { color: var(--text-faint); font-size: 12px; text-align: right; }
@@ -366,8 +418,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
   background: var(--bg-overlay);
   display: grid; place-items: center; padding: 24px;
 }
-.modal { width: 100%; max-width: 560px; max-height: 90vh; overflow: auto; }
-.viewer { width: min(1100px, 96vw); height: 88vh; display: flex; flex-direction: column; }
+/* Stronger alpha over the dimmed overlay so modal text stays AA. The overlay
+   itself must NOT get backdrop-filter — an ancestor filter would become the
+   backdrop root and flatten the modal's own glass sampling. */
+.modal { width: 100%; max-width: 560px; max-height: 90vh; overflow: auto; background: var(--glass-bg-strong); }
+.viewer { width: min(1100px, 96vw); height: 88vh; display: flex; flex-direction: column; background: var(--glass-bg-strong); }
 .viewer iframe { flex: 1; border: none; border-radius: var(--r-md); background: #fff; }
 .viewer .txt {
   flex: 1; overflow: auto; white-space: pre-wrap;
@@ -462,6 +517,26 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 .badge.mint-solid { background: var(--mint); border-color: var(--mint); color: var(--ink-deep); }
 :root[data-theme="light"] .badge.mint-solid { color: #14004A; }
 
+/* ---------- glass fallbacks ---------- */
+/* No backdrop-filter support → the original solid surfaces. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card    { background: var(--bg-card); box-shadow: none; border-color: var(--line); }
+  .topbar  { background: var(--header-bg); box-shadow: none; }
+  .sku-row { background: var(--bg-card-dim); }
+  .sku-row:hover, .sku-row:focus-visible { background: var(--bg-card); }
+  .modal, .viewer, .tour-pop { background: var(--bg-card); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .card, .topbar, .modal, .viewer, .tour-pop {
+    -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+  }
+  .card, .modal, .viewer, .tour-pop { background: var(--card-opaque); }
+  .topbar  { background: var(--header-bg); }
+  .sku-row { background: var(--card-opaque); }
+  body::before { display: none; }
+}
+
 /* ============================================================
    UI POLISH : view transitions, login ripple, hover button,
    particles, onboarding tour
@@ -548,6 +623,9 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Rings breathe (scale + opacity pulse, staggered per ring) while the whole
+   group drifts slowly. Keyframes rest at the base values, so the global
+   reduced-motion rule freezes everything into clean static rings. */
 .ripple {
   position: absolute;
   inset: 0;
@@ -557,6 +635,7 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
   pointer-events: none;
   -webkit-mask-image: linear-gradient(to bottom, white 0%, white 55%, transparent 100%);
           mask-image: linear-gradient(to bottom, white 0%, white 55%, transparent 100%);
+  animation: ripple-drift 12s ease-in-out infinite alternate;
 }
 .ripple-ring {
   position: absolute;
@@ -565,11 +644,16 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
   border: 1.5px solid;
   border-radius: 50%;
   transform: translate(-50%, -50%) scale(1);
-  animation: ripple 2.8s ease-in-out infinite;
+  opacity: var(--ring-opacity, 0.24);
+  animation: ripple 3s ease-in-out infinite;
 }
 @keyframes ripple {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50%      { transform: translate(-50%, -50%) scale(0.9); }
+  0%, 100% { transform: translate(-50%, -50%) scale(1);    opacity: var(--ring-opacity, 0.24); }
+  50%      { transform: translate(-50%, -50%) scale(0.92); opacity: calc(var(--ring-opacity, 0.24) * 2.1); }
+}
+@keyframes ripple-drift {
+  from { transform: translateY(-5px) rotate(-0.6deg); }
+  to   { transform: translateY(5px)  rotate(0.6deg); }
 }
 
 /* ---------- interactive hover button ---------- */
@@ -630,13 +714,14 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
 
 /* ---------- topographic backdrop ---------- */
 /* Static contour pattern behind all post-login content. Sits above the body
-   gradient, below every card (z-index: -1, no opaque ancestor inside #root). */
+   gradient but below the film-grain overlay (body::before at z -1), below
+   every card (no opaque ancestor inside #root). */
 .topo-bg {
   position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: -1;
+  z-index: -2;
   pointer-events: none;
 }
 
@@ -666,14 +751,14 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
 .tour-pop {
   position: fixed;
   max-width: 320px;
-  background: var(--bg-card);
-  border: 1px solid var(--line);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
   padding: 18px;
   outline: none;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 18px 50px rgba(6, 0, 26, 0.45);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 18px 50px rgba(6, 0, 26, 0.45);
 }
 .tour-overlay.centered .tour-pop { position: relative; }
 .tour-pop h3 { font-family: var(--font-display); }
