@@ -10,6 +10,10 @@ import {
   updateSkuBuyer, effectiveBuyer,
 } from '../lib/api.js';
 
+const PINK_STAGES = new Set([
+  'final_approved_for_print', 'sent_to_vendor', 'mockup_received', 'in_production',
+]);
+
 const KIND_LABEL = {
   brief_text: 'Brief (text)', brief_file: 'Brief', reference: 'Reference',
   draft: 'Draft', compliance_feedback: 'Compliance', mockup: 'Mock-up',
@@ -300,7 +304,10 @@ export default function SkuDetail() {
               const done = !!row?.done;
               const allowed = isAdmin || t.client_can_toggle;
               return (
-                <li key={t.stage_key} className={t.client_can_toggle ? 'gate' : ''}>
+                <li key={t.stage_key} className={[
+                  t.client_can_toggle ? 'gate' : '',
+                  PINK_STAGES.has(t.stage_key) ? 'pink-stage' : '',
+                ].filter(Boolean).join(' ')}>
                   <button
                     className={'check' + (done ? ' done' : '')}
                     disabled={!allowed}

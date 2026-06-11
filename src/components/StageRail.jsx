@@ -13,6 +13,10 @@ const SHORT_LABELS = {
   mockup_received: 'Mock-up', in_production: 'Production',
 };
 
+const PINK_STAGES = new Set([
+  'final_approved_for_print', 'sent_to_vendor', 'mockup_received', 'in_production',
+]);
+
 export default function StageRail({ templates, stages, canToggle, onToggle }) {
   const byKey = useMemo(
     () => Object.fromEntries((stages || []).map((s) => [s.stage_key, s])),
@@ -43,16 +47,23 @@ export default function StageRail({ templates, stages, canToggle, onToggle }) {
         const allowed = canToggle(t);
         return (
           <span key={t.stage_key} style={{ display: 'contents' }}>
-            {i > 0 && <span className={'link' + (done ? ' done' : '')} />}
+            {i > 0 && (
+              <span className={[
+                'link',
+                done ? 'done' : '',
+                done && PINK_STAGES.has(t.stage_key) ? 'pink' : '',
+              ].filter(Boolean).join(' ')} />
+            )}
             <button
               type="button"
               className={[
                 'node',
                 done ? 'done' : '',
+                done && PINK_STAGES.has(t.stage_key) ? 'pink' : '',
                 i === frontierIdx ? 'frontier' : '',
                 t.is_optional ? 'optional' : '',
                 t.client_can_toggle ? 'client-gate' : '',
-              ].join(' ')}
+              ].filter(Boolean).join(' ')}
               disabled={!allowed}
               onClick={(e) => { e.stopPropagation(); allowed && row && onToggle(row, !done); }}
               aria-label={`${t.label}: ${done ? 'done' : 'pending'}`}

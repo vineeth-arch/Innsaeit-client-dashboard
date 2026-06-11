@@ -240,8 +240,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .rail .node.optional:not(.done) { border-style: dashed; }
 .rail .node.client-gate { width: 17px; height: 17px; border-width: 2px; }
 .rail .node[disabled] { cursor: default; }
+.rail .node.pink.done { background: var(--pink); border-color: var(--pink); box-shadow: 0 0 8px rgba(255,0,108,0.55); }
 .rail .link { height: 1.5px; flex: 1 1 8px; min-width: 5px; background: var(--text-faint); opacity: 0.4; }
 .rail .link.done { background: var(--mint); opacity: 0.8; }
+.rail .link.pink.done { background: var(--pink); }
 
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 207, 0.5); }
@@ -332,6 +334,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .stage-list li.gate { background: var(--mint-dim); border-radius: var(--r-sm); padding-left: 10px; padding-right: 10px; }
 .stage-list li.gate .check.done { background: var(--pink); border-color: var(--pink); }
 :root[data-theme="light"] .stage-list li.gate .check.done { color: #fff; }
+.stage-list li.pink-stage .check.done { background: var(--pink); border-color: var(--pink); }
+:root[data-theme="light"] .stage-list li.pink-stage .check.done { color: #fff; }
 
 /* ---------- files ---------- */
 .file-row {
