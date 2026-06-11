@@ -277,3 +277,12 @@ create trigger touch_projects before update on public.projects
   for each row execute function public.touch_updated_at();
 create trigger touch_skus before update on public.skus
   for each row execute function public.touch_updated_at();
+
+-- ===== Migration: Buyer field (project + SKU override) =====
+-- The projects/skus tables already exist live, so apply just this block in the
+-- Supabase SQL Editor. The columns inherit the existing RLS policies (admin write,
+-- client read), so no new policies are required.
+-- A SKU's effective buyer is computed at read time: buyer_override if set,
+-- otherwise the parent project's buyer (null buyer_override = inherit).
+alter table public.projects add column if not exists buyer text;
+alter table public.skus add column if not exists buyer_override text;

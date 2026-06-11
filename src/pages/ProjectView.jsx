@@ -5,6 +5,7 @@ import { useAuth } from '../auth/useAuth.jsx';
 import StageRail from '../components/StageRail.jsx';
 import {
   fetchProject, fetchSkus, fetchStageTemplates, createSku, toggleStage,
+  updateProjectBuyer, effectiveBuyer,
 } from '../lib/api.js';
 
 const SUB_BRANDS = ['', 'Ralleyz', 'Youreka', 'Snapkid', 'Miens', 'KSY', 'Other / none'];
@@ -17,7 +18,9 @@ export default function ProjectView() {
   const [templates, setTemplates] = useState([]);
   const [filter, setFilter] = useState('');
   const [showNew, setShowNew] = useState(false);
-  const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false });
+  const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '' });
+  const [editingBuyer, setEditingBuyer] = useState(false);
+  const [buyerDraft, setBuyerDraft] = useState('');
 
   async function load() {
     const p = await fetchProject(projectId);
@@ -51,10 +54,22 @@ export default function ProjectView() {
     await createSku(project.client_id, projectId, {
       ...f,
       sub_brand: f.sub_brand === 'Other / none' ? null : f.sub_brand || null,
+      buyer_override: f.buyer_override.trim() || null,
     });
-    setF({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false });
+    setF({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '' });
     setShowNew(false);
     setSkus(await fetchSkus(projectId));
+  }
+
+  function startEditBuyer() {
+    setBuyerDraft(project.buyer || '');
+    setEditingBuyer(true);
+  }
+
+  async function saveBuyer() {
+    await updateProjectBuyer(project.id, buyerDraft.trim() || null);
+    setEditingBuyer(false);
+    setProject(await fetchProject(projectId)); // refetch so inherited SKU rows update live
   }
 
   function doneCount(s) {
@@ -71,6 +86,23 @@ export default function ProjectView() {
         <div>
           <p className="eyebrow"><Link to="/">Projects</Link> / {project.vendor || 'Vendor TBC'}</p>
           <h1 className="display">{project.name}</h1>
+          {editingBuyer ? (
+            <div className="toolrow" style={{ marginTop: 8 }}>
+              <input type="text" placeholder="Buyer name" value={buyerDraft} autoFocus
+                     onChange={(e) => setBuyerDraft(e.target.value)} style={{ width: 200 }} />
+              <button className="btn primary sm" onClick={saveBuyer}>Save</button>
+              <button className="btn ghost sm" onClick={() => setEditingBuyer(false)}>Cancel</button>
+            </div>
+          ) : (
+            (project.buyer || isAdmin) && (
+              <p className="sub" style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {project.buyer ? <span>Buyer: {project.buyer}</span> : <span style={{ color: 'var(--text-faint)' }}>No buyer set</span>}
+                {isAdmin && (
+                  <button className="btn ghost sm" onClick={startEditBuyer}>{project.buyer ? 'Edit' : 'Add buyer'}</button>
+                )}
+              </p>
+            )
+          )}
         </div>
         <div className="toolrow">
           <input type="text" placeholder="Search SKU, code, sub-brand…" value={filter}
@@ -94,6 +126,9 @@ export default function ProjectView() {
                 {s.sub_brand && <span className="badge mint">{s.sub_brand}</span>}
                 <span className="badge">{s.compliance_owner === 'internal' ? 'Compliance: Santosh' : 'Compliance: Hamleys HK/UK'}</span>
                 {s.second_gate && <span className="badge">2nd gate</span>}
+                {effectiveBuyer(s, project.buyer) && (
+                  <span className="badge">Buyer: {effectiveBuyer(s, project.buyer)}</span>
+                )}
               </div>
             </div>
             <StageRail templates={templates} stages={s.sku_stages} canToggle={canToggle} onToggle={onToggle} />
@@ -140,6 +175,11 @@ export default function ProjectView() {
                 <option value="internal">Santosh (internal)</option>
                 <option value="hamleys_hk_uk">Hamleys HK / UK QA</option>
               </select>
+            </div>
+            <div className="field">
+              <label className="eyebrow">Buyer (overrides project buyer)</label>
+              <input type="text" placeholder="Leave blank to inherit" value={f.buyer_override}
+                     onChange={(e) => setF({ ...f, buyer_override: e.target.value })} />
             </div>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, cursor: 'pointer' }}>
               <input type="checkbox" checked={f.second_gate}

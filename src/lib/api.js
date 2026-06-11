@@ -59,7 +59,7 @@ export async function fetchSkus(projectId) {
 export async function fetchSku(skuId) {
   const { data } = await supabase
     .from('skus')
-    .select('*, sku_stages(*), projects(name, vendor)')
+    .select('*, sku_stages(*), projects(name, vendor, buyer)')
     .eq('id', skuId).single();
   return data;
 }
@@ -82,12 +82,30 @@ export async function fetchComments(skuId) {
 }
 
 // ---------- writes ----------
-export async function createProject(clientId, name, vendor) {
+export async function createProject(clientId, name, vendor, buyer) {
   const { data, error } = await supabase
-    .from('projects').insert({ client_id: clientId, name, vendor })
+    .from('projects').insert({ client_id: clientId, name, vendor, buyer })
     .select().single();
   if (error) throw error;
   return data;
+}
+
+// Effective buyer = SKU override if set, else the parent project's buyer (live inherit).
+export function effectiveBuyer(sku, projectBuyer) {
+  return sku?.buyer_override || projectBuyer || null;
+}
+
+export async function updateProjectBuyer(projectId, buyer) {
+  const { error } = await supabase
+    .from('projects').update({ buyer: buyer || null }).eq('id', projectId);
+  if (error) throw error;
+}
+
+// value null/empty clears the override → SKU goes back to inheriting the project buyer.
+export async function updateSkuBuyer(skuId, value) {
+  const { error } = await supabase
+    .from('skus').update({ buyer_override: value || null }).eq('id', skuId);
+  if (error) throw error;
 }
 
 export async function createSku(clientId, projectId, fields) {

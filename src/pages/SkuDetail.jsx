@@ -7,6 +7,7 @@ import {
   fetchSku, fetchStageTemplates, fetchFiles, fetchComments,
   toggleStage, addTextBrief, addExternalLink, addComment,
   uploadToOneDrive, registerUploadedFile,
+  updateSkuBuyer, effectiveBuyer,
 } from '../lib/api.js';
 
 const KIND_LABEL = {
@@ -35,6 +36,10 @@ export default function SkuDetail() {
   const fileInput = useRef(null);
 
   const [newComment, setNewComment] = useState('');
+
+  // buyer override edit state
+  const [editingBuyer, setEditingBuyer] = useState(false);
+  const [buyerDraft, setBuyerDraft] = useState('');
 
   async function load() {
     const s = await fetchSku(skuId);
@@ -105,6 +110,23 @@ export default function SkuDetail() {
     }
   }
 
+  function startEditBuyer() {
+    setBuyerDraft(sku.buyer_override || '');
+    setEditingBuyer(true);
+  }
+
+  async function saveBuyer() {
+    await updateSkuBuyer(sku.id, buyerDraft.trim() || null);
+    setEditingBuyer(false);
+    load();
+  }
+
+  async function resetBuyer() {
+    await updateSkuBuyer(sku.id, null);
+    setEditingBuyer(false);
+    load();
+  }
+
   async function submitComment() {
     if (!newComment.trim()) return;
     await addComment(sku.client_id, sku.id, newComment.trim());
@@ -128,6 +150,30 @@ export default function SkuDetail() {
             {' · '}{sku.compliance_owner === 'internal' ? 'Compliance: Santosh' : 'Compliance: Hamleys HK/UK'}
             {sku.second_gate ? ' (+ second gate)' : ''}
           </p>
+          {editingBuyer ? (
+            <div className="toolrow" style={{ marginTop: 10 }}>
+              <input type="text" placeholder="Buyer (overrides project)" value={buyerDraft} autoFocus
+                     onChange={(e) => setBuyerDraft(e.target.value)} style={{ width: 200 }} />
+              <button className="btn primary sm" onClick={saveBuyer}>Save</button>
+              <button className="btn ghost sm" onClick={() => setEditingBuyer(false)}>Cancel</button>
+            </div>
+          ) : (
+            (effectiveBuyer(sku, sku.projects?.buyer) || isAdmin) && (
+              <div className="toolrow" style={{ marginTop: 10 }}>
+                {effectiveBuyer(sku, sku.projects?.buyer)
+                  ? <span className="badge">Buyer: {effectiveBuyer(sku, sku.projects?.buyer)}</span>
+                  : <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>No buyer set</span>}
+                {isAdmin && (
+                  <button className="btn ghost sm" onClick={startEditBuyer}>
+                    {sku.buyer_override ? 'Edit override' : 'Override buyer'}
+                  </button>
+                )}
+                {isAdmin && sku.buyer_override && (
+                  <button className="btn ghost sm" onClick={resetBuyer}>Reset to project buyer</button>
+                )}
+              </div>
+            )
+          )}
         </div>
       </div>
 
