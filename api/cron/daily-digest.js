@@ -243,6 +243,15 @@ export default async function handler(req, res) {
   const results = [];
   try {
     const supa = serviceClient();
+    // Admin can pause all daily digests on demand via the Settings toggle
+    // (app_settings.digests_paused). The live compliance-approved email is
+    // unaffected — only this scheduled cron is suspended.
+    const { data: paused } = await supa
+      .from('app_settings').select('value').eq('key', 'digests_paused').maybeSingle();
+    if (paused?.value === true || paused?.value === 'true') {
+      console.log('[daily-digest] paused via app_settings — no digests sent');
+      return res.end(JSON.stringify({ ok: true, paused: true, date: digestDate, results: [] }));
+    }
     const [clients, profiles, templates, skus, files, comments, checklist] = await gather(supa, since);
     const jobs = buildJobs({ clients, profiles, templates, skus, files, comments, checklist, now, since });
 

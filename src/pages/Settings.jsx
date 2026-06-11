@@ -1,7 +1,7 @@
 // src/pages/Settings.jsx
 import { useAuth } from '../auth/useAuth.jsx';
 import IntegrationsPanel from '../components/IntegrationsPanel.jsx';
-import TestModePanel from '../components/TestModePanel.jsx';
+import EmailControlsPanel from '../components/EmailControlsPanel.jsx';
 
 export default function Settings() {
   const { isAdmin } = useAuth();
@@ -30,7 +30,7 @@ export default function Settings() {
 
       <IntegrationsPanel />
 
-      <TestModePanel />
+      <EmailControlsPanel />
 
       <div className="card">
         <span className="eyebrow">Users</span>

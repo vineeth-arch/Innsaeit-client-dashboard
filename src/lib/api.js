@@ -456,18 +456,18 @@ export async function checkIntegration(service) {
   return res.json();
 }
 
-// ---------- Test mode toggle (admin-only) ----------
-export async function getTestMode() {
-  const res = await fetch('/api/settings/test-mode', { headers: await authHeader() });
-  if (!res.ok) throw new Error('Failed to fetch test mode');
-  return res.json(); // { testMode: bool, recipient: string|null }
+// ---------- App settings flags (admin-only) ----------
+export async function getFlags() { // { testMode, digestsPaused, recipient }
+  const res = await fetch('/api/settings/flags', { headers: await authHeader() });
+  if (!res.ok) throw new Error('Failed to fetch settings');
+  return res.json();
 }
-export async function setTestMode(testMode) {
-  const res = await fetch('/api/settings/test-mode', {
+export async function setFlag(key, value) {
+  const res = await fetch('/api/settings/flags', {
     method: 'POST',
     headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ testMode }),
+    body: JSON.stringify({ key, value }),
   });
-  if (!res.ok) throw new Error('Failed to update test mode');
+  if (!res.ok) throw new Error('Failed to update settings');
   return res.json();
 }
