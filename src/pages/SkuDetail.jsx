@@ -5,7 +5,7 @@ import { useAuth } from '../auth/useAuth.jsx';
 import FileViewer from '../components/FileViewer.jsx';
 import {
   fetchSku, fetchStageTemplates, fetchFiles, fetchComments,
-  toggleStage, addTextBrief, addExternalLink, addComment,
+  toggleStage, addTextBrief, addExternalLink, addComment, deleteComment,
   uploadToOneDrive, registerUploadedFile,
   updateSkuBuyer, effectiveBuyer,
 } from '../lib/api.js';
@@ -138,6 +138,13 @@ export default function SkuDetail() {
     await updateSkuBuyer(sku.id, null);
     setEditingBuyer(false);
     load();
+  }
+
+  async function onDeleteComment(id) {
+    try {
+      await deleteComment(id);
+      setComments(await fetchComments(skuId));
+    } catch (e) { setErr(e.message); }
   }
 
   async function submitComment() {
@@ -276,13 +283,23 @@ export default function SkuDetail() {
             <span className="eyebrow">Comments</span>
             <div style={{ marginTop: 10 }}>
               {comments.length === 0 && <p style={{ color: 'var(--text-faint)', fontSize: 13 }}>No comments yet.</p>}
-              {comments.map((c) => (
-                <div className="comment" key={c.id}>
-                  <span className="who">{c.profiles?.full_name || c.profiles?.email}</span>
-                  <span className="when">{new Date(c.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                  <p className="body">{c.body}</p>
-                </div>
-              ))}
+              {comments.map((c) => {
+                const isDeleted = !!c.deleted_at;
+                const canDelete = !isDeleted && (isAdmin || c.author_id === profile?.id);
+                return (
+                  <div className={'comment' + (isDeleted ? ' deleted' : '')} key={c.id}>
+                    <span className="who">{c.profiles?.full_name || c.profiles?.email}</span>
+                    <span className="when">{new Date(c.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                    {isDeleted
+                      ? <span className="deleted-pill">deleted{c.deleter ? ` by ${c.deleter.full_name || c.deleter.email}` : ''}</span>
+                      : canDelete && (
+                        <button className="btn ghost sm comment-delete" onClick={() => onDeleteComment(c.id)} aria-label="Delete comment">×</button>
+                      )
+                    }
+                    <p className="body">{c.body}</p>
+                  </div>
+                );
+              })}
             </div>
             <hr className="sep" />
             <div className="field">

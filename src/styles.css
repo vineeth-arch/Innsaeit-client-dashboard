@@ -354,6 +354,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 :root[data-theme="light"] .comment .who { color: var(--indigo); }
 .comment .when { color: var(--text-faint); font-size: 11px; margin-left: 8px; }
 .comment .body { margin-top: 3px; white-space: pre-wrap; }
+.comment.deleted .body { opacity: 0.35; text-decoration: line-through; }
+.comment .comment-delete { opacity: 0; margin-left: auto; padding: 1px 7px; font-size: 14px; line-height: 1; color: var(--text-faint); border-color: transparent; float: right; }
+.comment:hover .comment-delete { opacity: 1; }
+.comment .deleted-pill { font-family: var(--font-label); font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--danger); border: 1px solid rgba(255,92,122,0.35); border-radius: 4px; padding: 1px 6px; margin-left: 8px; vertical-align: middle; }
 
 /* ---------- modal / viewer ---------- */
 .overlay {

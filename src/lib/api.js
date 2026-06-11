@@ -76,7 +76,7 @@ export async function fetchFiles(skuId) {
 export async function fetchComments(skuId) {
   const { data } = await supabase
     .from('comments')
-    .select('*, profiles:author_id(full_name, email)')
+    .select('*, profiles:author_id(full_name, email), deleter:deleted_by(full_name, email)')
     .eq('sku_id', skuId)
     .order('created_at');
   return data || [];
@@ -153,6 +153,11 @@ export async function addComment(clientId, skuId, body) {
   const { error } = await supabase.from('comments').insert({
     client_id: clientId, sku_id: skuId, body, author_id: user.id,
   });
+  if (error) throw error;
+}
+
+export async function deleteComment(commentId) {
+  const { error } = await supabase.rpc('delete_comment', { comment_id: commentId });
   if (error) throw error;
 }
 

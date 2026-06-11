@@ -137,7 +137,9 @@ create table public.comments (
   file_id     uuid references public.files(id) on delete cascade,
   body        text not null,
   author_id   uuid not null references public.profiles(id),
-  created_at  timestamptz not null default now()
+  created_at  timestamptz not null default now(),
+  deleted_at  timestamptz,                                   -- soft delete: set, never hard-deleted
+  deleted_by  uuid references public.profiles(id)            -- who removed it (author or admin)
 );
 
 -- ---------- ONEDRIVE TOKENS (server-side only; no client policies at all) ----------
@@ -222,10 +224,30 @@ create policy "client reads files" on public.files
 
 create policy "admin all comments" on public.comments
   for all using (public.is_admin()) with check (public.is_admin());
+-- Clients only see non-deleted comments in their tenant.
 create policy "client reads comments" on public.comments
-  for select using (client_id = public.my_client_id());
+  for select using (client_id = public.my_client_id() and deleted_at is null);
 create policy "client writes comments" on public.comments
   for insert with check (client_id = public.my_client_id() and author_id = auth.uid());
+
+-- Soft-delete function enforces: admin OR the comment's own author may delete.
+-- Runs as SECURITY DEFINER so it can bypass RLS to update deleted_at/deleted_by.
+create or replace function public.delete_comment(comment_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_author uuid;
+begin
+  select author_id into v_author from public.comments where id = comment_id;
+  if v_author is null then
+    raise exception 'comment not found';
+  end if;
+  if not (public.is_admin() or v_author = auth.uid()) then
+    raise exception 'not authorized';
+  end if;
+  update public.comments
+    set deleted_at = now(), deleted_by = auth.uid()
+    where id = comment_id;
+end; $$;
 
 -- ============================================================
 -- SEED : Hamleys tenant + 14-stage pipeline
@@ -286,3 +308,32 @@ create trigger touch_skus before update on public.skus
 -- otherwise the parent project's buyer (null buyer_override = inherit).
 alter table public.projects add column if not exists buyer text;
 alter table public.skus add column if not exists buyer_override text;
+
+-- ===== Migration: Comment soft-delete =====
+-- Run this block in the Supabase SQL Editor against the live project.
+-- 1. Add soft-delete columns to comments.
+alter table public.comments add column if not exists deleted_at  timestamptz;
+alter table public.comments add column if not exists deleted_by  uuid references public.profiles(id);
+
+-- 2. Tighten the client read policy to hide deleted comments.
+drop policy if exists "client reads comments" on public.comments;
+create policy "client reads comments" on public.comments
+  for select using (client_id = public.my_client_id() and deleted_at is null);
+
+-- 3. Create the security-definer soft-delete function.
+create or replace function public.delete_comment(comment_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_author uuid;
+begin
+  select author_id into v_author from public.comments where id = comment_id;
+  if v_author is null then
+    raise exception 'comment not found';
+  end if;
+  if not (public.is_admin() or v_author = auth.uid()) then
+    raise exception 'not authorized';
+  end if;
+  update public.comments
+    set deleted_at = now(), deleted_by = auth.uid()
+    where id = comment_id;
+end; $$;
