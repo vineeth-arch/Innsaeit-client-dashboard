@@ -1,0 +1,11 @@
+# Secrets / generated credentials — never commit
+.env
+.env.*
+!.env.example
+scripts/credentials.local.txt
+
+# Node / build
+node_modules/
+dist/
+.vercel/
+*.log
