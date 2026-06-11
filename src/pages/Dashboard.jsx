@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.jsx';
+import ActivityFeed from '../components/ActivityFeed.jsx';
 import { fetchClients, fetchProjects, createProject } from '../lib/api.js';
 
 export default function Dashboard() {
@@ -83,6 +84,8 @@ export default function Dashboard() {
           </Link>
         ))}
       </div>
+
+      {clientId && <ActivityFeed clientId={clientId} />}
 
       {showNew && (
         <div className="overlay" onClick={(e) => e.target === e.currentTarget && setShowNew(false)}>

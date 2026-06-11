@@ -392,3 +392,18 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
   .page { padding: 20px 16px 60px; }
   .topbar { padding: 12px 16px; }
 }
+
+/* ---------- Amber badge (changes requested) + activity feed ---------- */
+.badge.amber { border-color: rgba(255, 198, 92, 0.45); color: var(--amber); background: rgba(255, 198, 92, 0.12); }
+:root[data-theme="light"] .badge.amber { color: #8A5B00; }
+
+.activity-feed { margin-top: 24px; }
+.activity-row {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--line);
+  color: var(--text-dim); font-size: 13px; text-decoration: none;
+}
+.activity-row:last-child { border-bottom: none; }
+.activity-row:hover { color: var(--text); }
+.activity-row .activity-text { flex: 1; min-width: 0; }
+.activity-row .activity-when { flex: none; font-family: var(--font-label); font-size: 11px; color: var(--text-faint); }

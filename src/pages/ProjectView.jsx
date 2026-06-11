@@ -7,6 +7,7 @@ import {
   fetchProject, fetchSkus, fetchStageTemplates, createSku, toggleStage,
   updateProjectBuyer, effectiveBuyer,
 } from '../lib/api.js';
+import { buildProjectCsv, downloadCsv, projectCsvFilename, buildProjectSummary } from '../lib/export.js';
 
 const SUB_BRANDS = ['', 'Ralleyz', 'Youreka', 'Snapkid', 'Miens', 'KSY', 'Other / none'];
 
@@ -22,6 +23,7 @@ export default function ProjectView() {
   const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '' });
   const [editingBuyer, setEditingBuyer] = useState(false);
   const [buyerDraft, setBuyerDraft] = useState('');
+  const [copied, setCopied] = useState(false);
   const [err, setErr] = useState('');
 
   async function load() {
@@ -90,6 +92,22 @@ export default function ProjectView() {
     }
   }
 
+  function onExportCsv() {
+    const csv = buildProjectCsv(project, skus, templates, effectiveBuyer);
+    downloadCsv(projectCsvFilename(project), csv);
+  }
+
+  async function onCopySummary() {
+    setErr('');
+    try {
+      await navigator.clipboard.writeText(buildProjectSummary(project, skus, templates));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setErr('Could not copy to clipboard.');
+    }
+  }
+
   function doneCount(s) {
     const required = templates.filter((t) => !t.is_optional).map((t) => t.stage_key);
     const done = (s.sku_stages || []).filter((r) => r.done && required.includes(r.stage_key)).length;
@@ -126,6 +144,10 @@ export default function ProjectView() {
         <div className="toolrow">
           <input type="text" placeholder="Search SKU, code, sub-brand…" value={filter}
                  onChange={(e) => setFilter(e.target.value)} style={{ width: 240 }} />
+          <button className="btn" onClick={onExportCsv} disabled={!skus || !templates.length}>Export CSV</button>
+          <button className="btn" onClick={onCopySummary} disabled={!skus || !templates.length}>
+            {copied ? 'Copied' : 'Copy summary'}
+          </button>
           {isAdmin && <button className="btn primary" onClick={() => { setErr(''); setShowNew(true); }}>Add SKU</button>}
         </div>
       </div>
@@ -153,6 +175,7 @@ export default function ProjectView() {
                 {s.sub_brand && <span className="badge mint">{s.sub_brand}</span>}
                 <span className="badge">{s.compliance_owner === 'internal' ? 'Compliance: Santosh' : 'Compliance: Hamleys HK/UK'}</span>
                 {s.second_gate && <span className="badge">2nd gate</span>}
+                {s.changes_requested && <span className="badge amber">Changes requested</span>}
                 {effectiveBuyer(s, project.buyer) && (
                   <span className="badge">Buyer: {effectiveBuyer(s, project.buyer)}</span>
                 )}

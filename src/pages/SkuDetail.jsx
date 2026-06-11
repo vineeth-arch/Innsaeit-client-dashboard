@@ -8,6 +8,7 @@ import {
   toggleStage, addTextBrief, addExternalLink, addComment, deleteComment,
   uploadToOneDrive, registerUploadedFile,
   updateSkuBuyer, effectiveBuyer,
+  requestSkuChanges, resolveSkuChanges,
 } from '../lib/api.js';
 
 const PINK_STAGES = new Set([
@@ -45,6 +46,12 @@ export default function SkuDetail() {
   // buyer override edit state
   const [editingBuyer, setEditingBuyer] = useState(false);
   const [buyerDraft, setBuyerDraft] = useState('');
+
+  // request-changes state
+  const [showRequest, setShowRequest] = useState(false);
+  const [reason, setReason] = useState('');
+  const [reqErr, setReqErr] = useState('');
+  const [reqBusy, setReqBusy] = useState(false);
 
   async function load() {
     setLoadErr('');
@@ -140,6 +147,28 @@ export default function SkuDetail() {
     load();
   }
 
+  async function submitRequestChanges() {
+    if (!reason.trim()) return;
+    setReqErr(''); setReqBusy(true);
+    try {
+      await requestSkuChanges(sku.id);
+      await addComment(sku.client_id, sku.id, `CHANGES REQUESTED: ${reason.trim()}`);
+      setShowRequest(false); setReason('');
+      load();
+    } catch (e) {
+      setReqErr(e.message || 'Could not request changes.');
+    } finally {
+      setReqBusy(false);
+    }
+  }
+
+  async function onResolveChanges() {
+    try {
+      await resolveSkuChanges(sku.id);
+      load();
+    } catch (e) { setErr(e.message); }
+  }
+
   async function onDeleteComment(id) {
     try {
       await deleteComment(id);
@@ -195,6 +224,18 @@ export default function SkuDetail() {
               </div>
             )
           )}
+          <div className="toolrow" style={{ marginTop: 10 }}>
+            {sku.changes_requested ? (
+              <>
+                <span className="badge amber">Changes requested</span>
+                {isAdmin && <button className="btn sm" onClick={onResolveChanges}>Resolve</button>}
+              </>
+            ) : (
+              <button className="btn sm" onClick={() => { setReason(''); setReqErr(''); setShowRequest(true); }}>
+                Request changes
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -358,6 +399,29 @@ export default function SkuDetail() {
           )}
         </div>
       </div>
+
+      {showRequest && (
+        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setShowRequest(false)}>
+          <div className="card modal">
+            <h2 className="display" style={{ fontSize: 22, marginBottom: 6 }}>Request changes</h2>
+            <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 14 }}>
+              Flags this SKU and posts your reason as a comment. No stages are changed.
+            </p>
+            <div className="field">
+              <label className="eyebrow">What needs changing?</label>
+              <textarea placeholder="e.g. Barcode panel uses the old logo — please swap to the 2026 version."
+                        value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
+            </div>
+            {reqErr && <p className="error-text" style={{ marginBottom: 10 }}>{reqErr}</p>}
+            <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
+              <button className="btn ghost" onClick={() => setShowRequest(false)}>Cancel</button>
+              <button className="btn primary" onClick={submitRequestChanges} disabled={!reason.trim() || reqBusy}>
+                {reqBusy ? 'Sending…' : 'Request changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {viewing && <FileViewer file={viewing} onClose={() => setViewing(null)} />}
     </main>

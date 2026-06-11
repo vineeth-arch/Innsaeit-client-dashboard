@@ -161,6 +161,58 @@ export async function deleteComment(commentId) {
   if (error) throw error;
 }
 
+// ---------- activity feed (read-only; RLS scopes visibility) ----------
+export async function fetchRecentStageActivity(clientId, limit = 30) {
+  const { data } = await supabase
+    .from('sku_stages')
+    .select('id, stage_key, done_at, sku_id, skus(id, product_name), actor:done_by(full_name, email)')
+    .eq('client_id', clientId)
+    .eq('done', true)
+    .not('done_at', 'is', null)
+    .order('done_at', { ascending: false })
+    .limit(limit);
+  return data || [];
+}
+
+export async function fetchRecentComments(clientId, limit = 30) {
+  const { data } = await supabase
+    .from('comments')
+    .select('id, created_at, sku_id, skus(id, product_name), author:author_id(full_name, email)')
+    .eq('client_id', clientId)
+    .is('deleted_at', null)
+    .not('sku_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return data || [];
+}
+
+export async function fetchRecentFiles(clientId, limit = 30) {
+  const { data } = await supabase
+    .from('files')
+    .select('id, kind, title, created_at, sku_id, skus(id, product_name), uploader:uploaded_by(full_name, email)')
+    .eq('client_id', clientId)
+    .not('sku_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return data || [];
+}
+
+// ---------- request changes ----------
+// Sets changes_requested + timestamp + user via the request_sku_changes RPC,
+// which is the only client write path on skus (no client UPDATE policy exists).
+export async function requestSkuChanges(skuId) {
+  const { error } = await supabase.rpc('request_sku_changes', { p_sku_id: skuId });
+  if (error) throw error;
+}
+
+export async function resolveSkuChanges(skuId) { // admin only (existing RLS enforces)
+  const { error } = await supabase
+    .from('skus')
+    .update({ changes_requested: false, changes_requested_at: null, changes_requested_by: null })
+    .eq('id', skuId);
+  if (error) throw error;
+}
+
 // ---------- OneDrive upload (chunked, direct to Microsoft) ----------
 const CHUNK = 10 * 1024 * 1024; // 10 MB chunks, multiple of 320 KiB
 

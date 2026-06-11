@@ -337,3 +337,35 @@ begin
     set deleted_at = now(), deleted_by = auth.uid()
     where id = comment_id;
 end; $$;
+
+-- ===== Migration: Client "Request changes" flag =====
+-- Run this block in the Supabase SQL Editor against the live project.
+-- 1. Flag columns on skus. They inherit existing RLS (admin write, client read).
+alter table public.skus add column if not exists changes_requested boolean not null default false;
+alter table public.skus add column if not exists changes_requested_at timestamptz;
+alter table public.skus add column if not exists changes_requested_by uuid references public.profiles(id);
+
+-- 2. Postgres RLS cannot restrict an UPDATE policy to specific columns, so a
+--    client UPDATE policy on skus would expose every column on permitted rows.
+--    Instead, reuse the delete_comment pattern: a SECURITY DEFINER function
+--    that only ever sets these three columns. No existing policy is touched;
+--    the client write surface on skus stays zero outside this function.
+--    Admin "Resolve" clears the flag via the existing "admin all skus" policy.
+create or replace function public.request_sku_changes(p_sku_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_client uuid;
+begin
+  select client_id into v_client from public.skus where id = p_sku_id;
+  if v_client is null then
+    raise exception 'sku not found';
+  end if;
+  if not (public.is_admin() or v_client = public.my_client_id()) then
+    raise exception 'not authorized';
+  end if;
+  update public.skus
+     set changes_requested    = true,
+         changes_requested_at = now(),
+         changes_requested_by = auth.uid()
+   where id = p_sku_id;
+end; $$;
