@@ -2,7 +2,7 @@
    Innsaeit Tracker : design system
    Brand: Design Innsaeit
    Electric Indigo #0D0035 / #2C0098 | Cyan Mint #00FFCF
-   Inter semibold (display/headings) | Space Grotesk (labels) | Inter (body)
+   General Sans (display/headings + labels) | Satoshi (body)
    ============================================================ */
 
 /* ---------- theme-independent tokens ---------- */
@@ -22,9 +22,10 @@
   --indigo:  #2C0098;
 
   /* fonts */
-  --font-display: 'Inter', sans-serif;
-  --font-label:   'Space Grotesk', sans-serif;
-  --font-body:    'Inter', sans-serif;
+  /* Heading face — swap to Söhne here when licensed; weights map 1:1 */
+  --font-display: 'General Sans', system-ui, sans-serif;
+  --font-label:   'General Sans', system-ui, sans-serif;
+  --font-body:    'Satoshi', system-ui, sans-serif;
 
   /* radii */
   --r-sm: 6px;
@@ -96,7 +97,7 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -114,18 +115,18 @@ a:hover { text-decoration: underline; }
   font-family: var(--font-display);
   font-style: normal;
   font-weight: 700;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
 }
 h1, h2 {
   font-family: var(--font-display);
   font-weight: 700;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.02em;
 }
 .eyebrow {
   font-family: var(--font-label);
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-dim);
 }
