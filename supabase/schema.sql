@@ -121,8 +121,10 @@ create table public.files (
   title         text not null,
   text_content  text,                        -- WhatsApp briefs pasted here
   external_url  text,                        -- Playbook / Smash / WeTransfer links vault
-  drive_item_id text,                        -- OneDrive item id
-  drive_path    text,
+  drive_item_id text,                        -- legacy OneDrive item id (pre-R2 rows only)
+  drive_path    text,                        -- legacy OneDrive path (pre-R2 rows only)
+  storage_key   text,                        -- R2 object key: innsaeit/{client}/{project}/{sku}/{ts}-{file}
+  storage_provider text default 'r2',
   file_name     text,
   mime_type     text,
   size_bytes    bigint,

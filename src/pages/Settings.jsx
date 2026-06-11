@@ -1,11 +1,8 @@
 // src/pages/Settings.jsx
-import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.jsx';
 
 export default function Settings() {
   const { isAdmin } = useAuth();
-  const [params] = useSearchParams();
-  const connected = params.get('onedrive') === 'connected';
 
   if (!isAdmin) {
     return <main className="page"><div className="empty">Settings are admin-only.</div></main>;
@@ -20,17 +17,13 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }} data-tour="onedrive">
-        <span className="eyebrow">OneDrive storage</span>
-        <p style={{ color: 'var(--text-dim)', margin: '8px 0 14px', fontSize: 13 }}>
-          All uploads land in <code>/Innsaeit Tracker/&#123;client&#125;/&#123;project&#125;/&#123;sku&#125;/</code> on
-          your OneDrive. If your Microsoft password changes or sessions are revoked,
-          uploads will fail until you reconnect here. One click fixes it.
+      <div className="card" style={{ marginBottom: 16 }} data-tour="storage">
+        <span className="eyebrow">Storage: Cloudflare R2 (connected)</span>
+        <p style={{ color: 'var(--text-dim)', margin: '8px 0 0', fontSize: 13 }}>
+          All uploads land in <code>innsaeit/&#123;client&#125;/&#123;project&#125;/&#123;sku&#125;/</code> on
+          Cloudflare R2. Storage uses app-level credentials, so there is nothing to
+          connect or reconnect here.
         </p>
-        {connected && <p className="ok-text" style={{ marginBottom: 12 }}>OneDrive connected successfully.</p>}
-        <a className="btn primary" href="/api/onedrive/auth-start">
-          {connected ? 'Reconnect OneDrive' : 'Connect OneDrive'}
-        </a>
       </div>
 
       <div className="card">

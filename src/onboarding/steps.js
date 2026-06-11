@@ -46,13 +46,13 @@ function adminSteps(ctx) {
       body: 'Set the power type and market, then load the matching checklist for this SKU.' },
     { id: 'files', route: skuRoute(ctx), target: '[data-tour="files"]',
       title: 'Briefs, drafts & links',
-      body: 'Paste WhatsApp briefs, save links or upload files — everything lands in OneDrive and never expires.' },
+      body: 'Paste WhatsApp briefs, save links or upload files — everything lands in cloud storage and never expires.' },
     { id: 'comments', route: skuRoute(ctx), target: '[data-tour="comments"]',
       title: 'Comments',
       body: 'Discuss drafts with the client right next to the work itself.' },
-    { id: 'settings', route: '/settings', target: '[data-tour="onedrive"]',
-      title: 'OneDrive',
-      body: "If uploads ever fail, reconnect here in one click. That's the tour — replay it anytime from the header." },
+    { id: 'settings', route: '/settings', target: '[data-tour="storage"]',
+      title: 'Storage',
+      body: "Files live on Cloudflare R2 — nothing to connect or maintain. That's the tour — replay it anytime from the header." },
   ];
 }
 

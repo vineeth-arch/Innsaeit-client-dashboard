@@ -1,8 +1,8 @@
 // src/components/FileViewer.jsx
 // One viewer for every file kind:
 //  - brief_text rows render the pasted WhatsApp text directly
-//  - OneDrive items embed inline when previewable (PDF/JPG/PNG/PPT/DOC/TXT)
-//  - AI/CDR and other working files show a clear download path instead
+//  - R2 objects embed inline when previewable (PDF/JPG/PNG/TXT)
+//  - AI/CDR, PPT/DOC and other working files show a clear download path instead
 import { useEffect, useState } from 'react';
 import { getViewLinks, isPreviewable } from '../lib/api.js';
 
@@ -13,12 +13,12 @@ export default function FileViewer({ file, onClose }) {
   const isText = file.kind === 'brief_text' || (file.file_name || '').toLowerCase().endsWith('.txt');
 
   useEffect(() => {
-    if (file.drive_item_id) {
-      getViewLinks(file.drive_item_id).then(setLinks).catch((e) => setErr(e.message));
+    if (file.storage_key) {
+      getViewLinks(file.storage_key).then(setLinks).catch((e) => setErr(e.message));
     }
-  }, [file.drive_item_id]);
+  }, [file.storage_key]);
 
-  const previewable = file.drive_item_id && isPreviewable(file.file_name, file.mime_type);
+  const previewable = file.storage_key && isPreviewable(file.file_name, file.mime_type);
 
   return (
     <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -47,13 +47,13 @@ export default function FileViewer({ file, onClose }) {
           </div>
         )}
 
-        {file.drive_item_id && previewable && !isText && (
+        {file.storage_key && previewable && !isText && (
           links?.embedUrl
             ? <iframe title={file.title} src={links.embedUrl} allowFullScreen />
             : <div className="empty" style={{ flex: 1 }}>{err || 'Preparing preview…'}</div>
         )}
 
-        {file.drive_item_id && !previewable && (
+        {file.storage_key && !previewable && (
           <div className="empty" style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
             <div>
               <p style={{ marginBottom: 10 }}>

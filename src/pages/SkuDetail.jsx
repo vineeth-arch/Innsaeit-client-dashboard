@@ -7,7 +7,7 @@ import ChecklistCard from '../components/ChecklistCard.jsx';
 import {
   fetchSku, fetchStageTemplates, fetchFiles, fetchComments, fetchClient,
   toggleStage, addTextBrief, addExternalLink, addComment, deleteComment,
-  uploadToOneDrive, registerUploadedFile,
+  uploadToR2, registerUploadedFile,
   updateSkuBuyer, effectiveBuyer, updateSkuPrintVendor,
   requestSkuChanges, resolveSkuChanges,
   fetchChecklistItems, fetchSkuChecker,
@@ -140,7 +140,7 @@ export default function SkuDetail() {
     if (!file) return;
     setErr(''); setProgress(0);
     try {
-      const drive = await uploadToOneDrive({
+      const upload = await uploadToR2({
         file,
         clientSlug: 'hamleys',
         projectName: sku.projects?.name,
@@ -148,15 +148,13 @@ export default function SkuDetail() {
         onProgress: setProgress,
       });
       await registerUploadedFile({
-        clientId: sku.client_id, skuId: sku.id, kind: uploadKind, title: file.name, file, drive,
+        clientId: sku.client_id, skuId: sku.id, kind: uploadKind, title: file.name, file, upload,
       });
       setProgress(null);
       load();
     } catch (e2) {
       setProgress(null);
-      setErr(e2.message.includes('ONEDRIVE_NOT_CONNECTED')
-        ? 'OneDrive is not connected yet. Go to Settings and click Connect OneDrive.'
-        : e2.message);
+      setErr(e2.message);
     }
   }
 

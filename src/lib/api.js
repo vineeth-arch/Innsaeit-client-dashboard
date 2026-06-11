@@ -381,58 +381,57 @@ export async function fetchProjectChecklistSummary(skuIds) {
   return data || [];
 }
 
-// ---------- OneDrive upload (chunked, direct to Microsoft) ----------
-const CHUNK = 10 * 1024 * 1024; // 10 MB chunks, multiple of 320 KiB
-
-export async function uploadToOneDrive({ file, clientSlug, projectName, skuName, onProgress }) {
+// ---------- Cloudflare R2 upload (presigned PUT, direct to R2) ----------
+export async function uploadToR2({ file, clientSlug, projectName, skuName, onProgress }) {
   const headers = { 'Content-Type': 'application/json', ...(await authHeader()) };
-  const res = await fetch('/api/onedrive/create-upload-session', {
+  const res = await fetch('/api/storage/upload-url', {
     method: 'POST', headers,
-    body: JSON.stringify({ clientSlug, projectName, skuName, fileName: file.name }),
+    body: JSON.stringify({
+      clientSlug, projectName, skuName,
+      fileName: file.name,
+      contentType: file.type || 'application/octet-stream',
+    }),
   });
   const session = await res.json();
-  if (!res.ok) throw new Error(session.error || 'Upload session failed');
+  if (!res.ok) throw new Error(session.error || 'Could not get upload URL');
 
-  let item = null;
-  for (let start = 0; start < file.size; start += CHUNK) {
-    const end = Math.min(start + CHUNK, file.size);
-    const blob = file.slice(start, end);
-    const put = await fetch(session.uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Range': `bytes ${start}-${end - 1}/${file.size}`,
-      },
-      body: blob,
-    });
-    if (!put.ok && put.status !== 202) {
-      throw new Error('Chunk upload failed at byte ' + start);
-    }
-    if (put.status === 200 || put.status === 201) item = await put.json();
-    onProgress?.(Math.round((end / file.size) * 100));
-  }
-  if (!item) throw new Error('Upload did not complete');
-  return { driveItemId: item.id, drivePath: session.drivePath, size: item.size };
+  // XHR rather than fetch: it's the only way to get upload progress events.
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', session.uploadUrl);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300)
+      ? resolve()
+      : reject(new Error(`Upload failed (${xhr.status})`));
+    xhr.onerror = () => reject(new Error('Upload failed — check the R2 bucket CORS policy allows this origin'));
+    xhr.send(file);
+  });
+
+  return { key: session.key, size: file.size };
 }
 
-export async function registerUploadedFile({ clientId, skuId, versionId, kind, title, file, drive }) {
+export async function registerUploadedFile({ clientId, skuId, versionId, kind, title, file, upload }) {
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from('files').insert({
     client_id: clientId, sku_id: skuId, version_id: versionId || null, kind,
     title: title || file.name,
-    drive_item_id: drive.driveItemId,
-    drive_path: drive.drivePath,
+    storage_key: upload.key,
+    storage_provider: 'r2',
     file_name: file.name,
     mime_type: file.type || null,
-    size_bytes: drive.size,
+    size_bytes: upload.size,
     uploaded_by: user.id,
   });
   if (error) throw error;
 }
 
-export async function getViewLinks(itemId) {
+export async function getViewLinks(key) {
   const headers = { 'Content-Type': 'application/json', ...(await authHeader()) };
-  const res = await fetch('/api/onedrive/view', {
-    method: 'POST', headers, body: JSON.stringify({ itemId }),
+  const res = await fetch('/api/storage/view', {
+    method: 'POST', headers, body: JSON.stringify({ key }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Could not get view link');
@@ -440,8 +439,10 @@ export async function getViewLinks(itemId) {
 }
 
 // Files that preview inline; everything else is download-only.
+// PPT/DOC dropped with the move to R2 — there's no Office renderer, so they
+// take the download path like AI/CDR.
 export function isPreviewable(fileName = '', mime = '') {
   const ext = fileName.split('.').pop()?.toLowerCase();
-  return ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'ppt', 'pptx', 'doc', 'docx', 'txt'].includes(ext)
+  return ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'txt'].includes(ext)
     || (mime || '').startsWith('image/');
 }
