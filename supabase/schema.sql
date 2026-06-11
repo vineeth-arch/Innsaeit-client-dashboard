@@ -580,3 +580,47 @@ from public.clients c,
   ('all',              'Compliance approved — okay to proceed for print',            11)
 ) as t(condition, label, position)
 where c.slug = 'hamleys';
+
+-- ===== Migration: Activity feed privacy (hide admin-actored events) =====
+-- Run this block in the Supabase SQL Editor against the live project.
+-- The activity feed must never surface an admin's own actions, for admins or
+-- clients. Profiles RLS ("read own profile or admin reads all") hides admin rows
+-- from client users, so client code cannot identify admin actors with a plain
+-- profiles query. This SECURITY DEFINER function returns admin UUIDs only (no
+-- names/emails) regardless of RLS; the data layer filters events against it.
+create or replace function public.admin_profile_ids()
+returns setof uuid language sql stable security definer set search_path = public as $$
+  select id from public.profiles where role = 'admin';
+$$;
+grant execute on function public.admin_profile_ids() to authenticated;
+
+-- ===== Migration: "Files Checked" pipeline stage at position 2 =====
+-- Run this block in the Supabase SQL Editor against the live project.
+-- Inserts a non-optional, non-client-toggleable stage between "Files Received"
+-- (pos 1) and "Brief Received". Idempotent and guarded: the position shift only
+-- runs if files_checked does not already exist, so a re-run cannot double-shift.
+do $$
+declare hid uuid;
+begin
+  select id into hid from public.clients where slug = 'hamleys';
+  if hid is not null and not exists (
+    select 1 from public.stage_templates where client_id = hid and stage_key = 'files_checked'
+  ) then
+    -- (a) shift positions >= 2 up by one
+    update public.stage_templates set position = position + 1
+      where client_id = hid and position >= 2;
+    -- (b) insert the new template at position 2
+    insert into public.stage_templates (client_id, stage_key, label, position, is_optional, client_can_toggle)
+      values (hid, 'files_checked', 'Files Checked', 2, false, false);
+    -- (c) backfill an unchecked sku_stages row for every existing Hamleys SKU
+    insert into public.sku_stages (sku_id, client_id, stage_key)
+      select s.id, s.client_id, 'files_checked' from public.skus s where s.client_id = hid
+      on conflict (sku_id, stage_key) do nothing;
+  end if;
+end $$;
+
+-- ===== Migration: Print vendor on SKUs =====
+-- Run this block in the Supabase SQL Editor against the live project.
+-- Distinct from projects.vendor (the factory) — this is where final files go for
+-- printing. Inherits existing skus RLS (admin write, client read).
+alter table public.skus add column if not exists print_vendor text;

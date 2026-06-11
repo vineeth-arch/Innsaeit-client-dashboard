@@ -109,6 +109,14 @@ export async function updateSkuBuyer(skuId, value) {
   if (error) throw error;
 }
 
+// value null/empty clears the print vendor. Distinct from projects.vendor
+// (the factory) — this is where final files go for printing.
+export async function updateSkuPrintVendor(skuId, value) { // admin only via RLS
+  const { error } = await supabase
+    .from('skus').update({ print_vendor: value || null }).eq('id', skuId);
+  if (error) throw error;
+}
+
 export async function createSku(clientId, projectId, fields) {
   const { data, error } = await supabase
     .from('skus').insert({ client_id: clientId, project_id: projectId, ...fields })
@@ -162,39 +170,65 @@ export async function deleteComment(commentId) {
 }
 
 // ---------- activity feed (read-only; RLS scopes visibility) ----------
+// Admin-actored events must never surface in the feed, for admins or clients.
+// Profiles RLS hides admin rows from client users, so we can't detect admin
+// actors with a plain profiles query — admin_profile_ids() is a SECURITY DEFINER
+// function that returns admin UUIDs (no names/emails) regardless of RLS.
+// Cached for the session; the actor sets rarely change.
+let _adminIdsPromise = null;
+async function getAdminActorIds() {
+  if (!_adminIdsPromise) {
+    _adminIdsPromise = (async () => {
+      const { data, error } = await supabase.rpc('admin_profile_ids');
+      if (error) { _adminIdsPromise = null; return new Set(); }
+      return new Set((data || []).map((r) => (typeof r === 'string' ? r : r.id)));
+    })();
+  }
+  return _adminIdsPromise;
+}
+
 export async function fetchRecentStageActivity(clientId, limit = 30) {
-  const { data } = await supabase
-    .from('sku_stages')
-    .select('id, stage_key, done_at, sku_id, skus(id, product_name), actor:done_by(full_name, email)')
-    .eq('client_id', clientId)
-    .eq('done', true)
-    .not('done_at', 'is', null)
-    .order('done_at', { ascending: false })
-    .limit(limit);
-  return data || [];
+  const [{ data }, adminIds] = await Promise.all([
+    supabase
+      .from('sku_stages')
+      .select('id, stage_key, done_at, sku_id, done_by, skus(id, product_name), actor:done_by(full_name, email)')
+      .eq('client_id', clientId)
+      .eq('done', true)
+      .not('done_at', 'is', null)
+      .order('done_at', { ascending: false })
+      .limit(limit),
+    getAdminActorIds(),
+  ]);
+  return (data || []).filter((r) => !adminIds.has(r.done_by));
 }
 
 export async function fetchRecentComments(clientId, limit = 30) {
-  const { data } = await supabase
-    .from('comments')
-    .select('id, created_at, sku_id, skus(id, product_name), author:author_id(full_name, email)')
-    .eq('client_id', clientId)
-    .is('deleted_at', null)
-    .not('sku_id', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  return data || [];
+  const [{ data }, adminIds] = await Promise.all([
+    supabase
+      .from('comments')
+      .select('id, created_at, sku_id, author_id, skus(id, product_name), author:author_id(full_name, email)')
+      .eq('client_id', clientId)
+      .is('deleted_at', null)
+      .not('sku_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+    getAdminActorIds(),
+  ]);
+  return (data || []).filter((r) => !adminIds.has(r.author_id));
 }
 
 export async function fetchRecentFiles(clientId, limit = 30) {
-  const { data } = await supabase
-    .from('files')
-    .select('id, kind, title, created_at, sku_id, skus(id, product_name), uploader:uploaded_by(full_name, email)')
-    .eq('client_id', clientId)
-    .not('sku_id', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  return data || [];
+  const [{ data }, adminIds] = await Promise.all([
+    supabase
+      .from('files')
+      .select('id, kind, title, created_at, sku_id, uploaded_by, skus(id, product_name), uploader:uploaded_by(full_name, email)')
+      .eq('client_id', clientId)
+      .not('sku_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+    getAdminActorIds(),
+  ]);
+  return (data || []).filter((r) => !adminIds.has(r.uploaded_by));
 }
 
 // ---------- request changes ----------

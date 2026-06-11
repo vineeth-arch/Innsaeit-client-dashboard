@@ -20,7 +20,7 @@ export default function ProjectView() {
   const [templates, setTemplates] = useState([]);
   const [filter, setFilter] = useState('');
   const [showNew, setShowNew] = useState(false);
-  const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', has_im: false });
+  const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', has_im: false, print_vendor: '' });
   const [editingBuyer, setEditingBuyer] = useState(false);
   const [buyerDraft, setBuyerDraft] = useState('');
   const [copied, setCopied] = useState(false);
@@ -81,8 +81,9 @@ export default function ProjectView() {
         ...f,
         sub_brand: f.sub_brand === 'Other / none' ? null : f.sub_brand || null,
         buyer_override: f.buyer_override.trim() || null,
+        print_vendor: f.print_vendor.trim() || null,
       });
-      setF({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', has_im: false });
+      setF({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', has_im: false, print_vendor: '' });
       setShowNew(false);
       const list = await fetchSkus(projectId);
       setSkus(list);
@@ -259,6 +260,11 @@ export default function ProjectView() {
               <label className="eyebrow">Buyer (overrides project buyer)</label>
               <input type="text" placeholder="Leave blank to inherit" value={f.buyer_override}
                      onChange={(e) => setF({ ...f, buyer_override: e.target.value })} />
+            </div>
+            <div className="field">
+              <label className="eyebrow">Print vendor</label>
+              <input type="text" placeholder="Where final files go for printing" value={f.print_vendor}
+                     onChange={(e) => setF({ ...f, print_vendor: e.target.value })} />
             </div>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
               <input type="checkbox" checked={f.second_gate}

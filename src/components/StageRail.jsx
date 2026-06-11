@@ -5,7 +5,7 @@
 import { useMemo } from 'react';
 
 const SHORT_LABELS = {
-  files_received: 'Files', brief_received: 'Brief', sub_brand_assigned: 'Sub-brand',
+  files_received: 'Files', files_checked: 'Checked', brief_received: 'Brief', sub_brand_assigned: 'Sub-brand',
   buyer_reference: 'Buyer ref', callouts_finalized: 'Callouts', draft_1: 'Draft 1',
   corrections_received: 'Corrections', final_draft: 'Final draft',
   compliance_sent: 'Compliance', compliance_approved: 'Approved',

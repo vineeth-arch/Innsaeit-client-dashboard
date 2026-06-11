@@ -8,7 +8,7 @@ import {
   fetchSku, fetchStageTemplates, fetchFiles, fetchComments,
   toggleStage, addTextBrief, addExternalLink, addComment, deleteComment,
   uploadToOneDrive, registerUploadedFile,
-  updateSkuBuyer, effectiveBuyer,
+  updateSkuBuyer, effectiveBuyer, updateSkuPrintVendor,
   requestSkuChanges, resolveSkuChanges,
   fetchChecklistItems, fetchSkuChecker, fetchClientUsers,
   toggleChecklistItem, generateSkuChecklist, addChecklistItem, deleteChecklistItem,
@@ -58,6 +58,10 @@ export default function SkuDetail() {
   // buyer override edit state
   const [editingBuyer, setEditingBuyer] = useState(false);
   const [buyerDraft, setBuyerDraft] = useState('');
+
+  // print vendor edit state
+  const [editingPrintVendor, setEditingPrintVendor] = useState(false);
+  const [printVendorDraft, setPrintVendorDraft] = useState('');
 
   // request-changes state
   const [showRequest, setShowRequest] = useState(false);
@@ -168,6 +172,17 @@ export default function SkuDetail() {
     load();
   }
 
+  function startEditPrintVendor() {
+    setPrintVendorDraft(sku.print_vendor || '');
+    setEditingPrintVendor(true);
+  }
+
+  async function savePrintVendor() {
+    await updateSkuPrintVendor(sku.id, printVendorDraft.trim() || null);
+    setEditingPrintVendor(false);
+    load();
+  }
+
   async function submitRequestChanges() {
     if (!reason.trim()) return;
     setReqErr(''); setReqBusy(true);
@@ -262,6 +277,7 @@ export default function SkuDetail() {
             {sku.sub_brand ? ` · ${sku.sub_brand}` : ''}
             {' · '}{sku.compliance_owner === 'internal' ? 'Compliance: Santosh' : 'Compliance: Hamleys HK/UK'}
             {sku.second_gate ? ' (+ second gate)' : ''}
+            {sku.print_vendor ? ` · Print: ${sku.print_vendor}` : ''}
           </p>
           {editingBuyer ? (
             <div className="toolrow" style={{ marginTop: 10 }}>
@@ -283,6 +299,27 @@ export default function SkuDetail() {
                 )}
                 {isAdmin && sku.buyer_override && (
                   <button className="btn ghost sm" onClick={resetBuyer}>Reset to project buyer</button>
+                )}
+              </div>
+            )
+          )}
+          {editingPrintVendor ? (
+            <div className="toolrow" style={{ marginTop: 10 }}>
+              <input type="text" placeholder="Print vendor" value={printVendorDraft} autoFocus
+                     onChange={(e) => setPrintVendorDraft(e.target.value)} style={{ width: 200 }} />
+              <button className="btn primary sm" onClick={savePrintVendor}>Save</button>
+              <button className="btn ghost sm" onClick={() => setEditingPrintVendor(false)}>Cancel</button>
+            </div>
+          ) : (
+            (sku.print_vendor || isAdmin) && (
+              <div className="toolrow" style={{ marginTop: 10 }}>
+                {sku.print_vendor
+                  ? <span className="badge">Print vendor: {sku.print_vendor}</span>
+                  : <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>No print vendor set</span>}
+                {isAdmin && (
+                  <button className="btn ghost sm" onClick={startEditPrintVendor}>
+                    {sku.print_vendor ? 'Edit print vendor' : 'Set print vendor'}
+                  </button>
                 )}
               </div>
             )
