@@ -16,6 +16,7 @@
 
   /* accent colours stay constant across themes */
   --mint:    #00FFCF;
+  --pink:    #FF006C;
   --danger:  #FF5C7A;
   --amber:   #FFC65C;
   --indigo:  #2C0098;
@@ -329,6 +330,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .stage-list .stage-label { flex: 1; }
 .stage-list .stamp { color: var(--text-faint); font-size: 11.5px; font-family: var(--font-label); }
 .stage-list li.gate { background: var(--mint-dim); border-radius: var(--r-sm); padding-left: 10px; padding-right: 10px; }
+.stage-list li.gate .check.done { background: var(--pink); border-color: var(--pink); }
+:root[data-theme="light"] .stage-list li.gate .check.done { color: #fff; }
 
 /* ---------- files ---------- */
 .file-row {

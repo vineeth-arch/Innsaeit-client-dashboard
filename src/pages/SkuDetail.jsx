@@ -317,6 +317,11 @@ export default function SkuDetail() {
                       {new Date(row.done_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                     </span>
                   )}
+                  {done && t.client_can_toggle && row?.approver && (
+                    <span className="stamp" style={{ color: '#FF006C' }}>
+                      ✓ {row.approver.full_name || row.approver.email}
+                    </span>
+                  )}
                 </li>
               );
             })}
