@@ -334,7 +334,7 @@ export default function SkuDetail() {
                     {done ? '✓' : ''}
                   </button>
                   <span className="stage-label" style={{ color: done ? 'var(--text)' : 'var(--text-dim)' }}>
-                    {t.label}{t.is_optional ? <span className="eyebrow" style={{ marginLeft: 6 }}>optional</span> : ''}
+                    {t.label}
                   </span>
                   {done && row?.done_at && (
                     <span className="stamp">
