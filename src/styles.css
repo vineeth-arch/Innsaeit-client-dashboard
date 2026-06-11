@@ -450,8 +450,8 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
   overflow: hidden;
   background-color: #0D0035;
   background-image:
-    radial-gradient(1200px 600px at 85% -10%, rgba(44, 0, 152, 0.45), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(44, 0, 152, 0.25), transparent 60%);
+    radial-gradient(1200px 600px at 85% -10%, rgba(44, 0, 152, 0.30), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(44, 0, 152, 0.18), transparent 60%);
   color: var(--text);
   --bg-card:   rgba(27, 0, 97, 0.35);
   --bg-input:  rgba(13, 0, 53, 0.6);
@@ -473,6 +473,36 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
 }
 .login-logo { height: 38px; margin-bottom: 26px; }
 .login-stack .login-card { width: 100%; max-width: none; }
+
+/* Teal frosted-glass card with dark-blue text, scoped so the field + ripple
+   behind it stay dark. Tokens are re-declared here (not on .login-wrap) so the
+   card flips to a light teal panel while everything around it remains the deep
+   indigo brand field. */
+.login-card {
+  background: linear-gradient(160deg, rgba(146, 240, 222, 0.92), rgba(108, 226, 206, 0.86));
+  border: 1px solid rgba(0, 255, 207, 0.55);
+  box-shadow:
+    0 24px 60px rgba(6, 0, 26, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.25) inset,
+    0 0 40px rgba(0, 255, 207, 0.25);
+  -webkit-backdrop-filter: blur(18px);
+          backdrop-filter: blur(18px);
+  color: #0D0035;
+  --text:      #0D0035;
+  --text-dim:  #2C0098;
+  --text-faint: rgba(13, 0, 53, 0.55);
+  --line:      rgba(13, 0, 53, 0.18);
+  --bg-input:  rgba(255, 255, 255, 0.72);
+}
+.login-card h1, .login-card .display { color: #0D0035; }
+.login-card .sub { color: rgba(13, 0, 53, 0.7); }
+.login-card .eyebrow { color: #2C0098; }
+.login-card input {
+  color: #0D0035;
+  border-color: rgba(13, 0, 53, 0.18);
+}
+.login-card input:focus { border-color: var(--indigo, #2C0098); }
+.login-card input::placeholder { color: rgba(13, 0, 53, 0.4); }
 @keyframes login-enter {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -485,14 +515,14 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
   place-items: center;
   z-index: 0;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(to bottom, white, transparent);
-          mask-image: linear-gradient(to bottom, white, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, white 0%, white 55%, transparent 100%);
+          mask-image: linear-gradient(to bottom, white 0%, white 55%, transparent 100%);
 }
 .ripple-ring {
   position: absolute;
   top: 50%;
   left: 50%;
-  border: 1px solid;
+  border: 1.5px solid;
   border-radius: 50%;
   transform: translate(-50%, -50%) scale(1);
   animation: ripple 2.8s ease-in-out infinite;
@@ -515,11 +545,12 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
   letter-spacing: 0.03em;
   padding: 11px 22px;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: rgba(27, 0, 97, 0.5);
-  color: var(--text);
+  border: 1px solid rgba(0, 255, 207, 0.5);
+  background: rgba(20, 0, 74, 0.92);
+  color: #EDEAFB;
   cursor: pointer;
-  transition: border-color 200ms ease;
+  box-shadow: 0 8px 22px rgba(6, 0, 26, 0.3);
+  transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 .ihb:active:not(:disabled) { transform: scale(0.97); transition: transform 120ms ease; }
 .ihb:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -557,10 +588,14 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
   .ihb:hover:not(:disabled) .ihb-hover { opacity: 1; transform: translateX(0); }
 }
 
-/* ---------- particles ---------- */
-.particles-canvas {
+/* ---------- topographic backdrop ---------- */
+/* Static contour pattern behind all post-login content. Sits above the body
+   gradient, below every card (z-index: -1, no opaque ancestor inside #root). */
+.topo-bg {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: -1;
   pointer-events: none;
 }

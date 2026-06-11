@@ -10,10 +10,10 @@ export default function Ripple({ mainSize = 210, count = 8 }) {
     <div className="ripple" aria-hidden="true">
       {Array.from({ length: count }).map((_, i) => {
         const size = mainSize + i * 70;
-        const opacity = Math.max(0.03, 0.24 - i * 0.03);
+        const opacity = Math.max(0.08, 0.5 - i * 0.05);
         const borderColor = i === 0
-          ? 'rgba(0, 255, 207, 0.30)'
-          : `rgba(44, 0, 152, ${Math.max(0.1, 0.55 - i * 0.05)})`;
+          ? 'rgba(0, 255, 207, 0.55)'
+          : `rgba(141, 124, 255, ${Math.max(0.22, 0.7 - i * 0.06)})`;
         return (
           <span
             key={i}
