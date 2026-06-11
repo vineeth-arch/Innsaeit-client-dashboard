@@ -8,7 +8,7 @@
 /* ---------- theme-independent tokens ---------- */
 :root {
   /* header is always dark indigo — does NOT change with theme */
-  --header-bg:         rgba(13, 0, 53, 0.7);
+  --header-bg:         #0D0035;
   --header-text:       #EDEAFB;
   --header-text-dim:   #9D95C7;
   --header-text-faint: #6A6299;
