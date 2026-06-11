@@ -1,6 +1,6 @@
 // src/pages/ProjectView.jsx
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.jsx';
 import StageRail from '../components/StageRail.jsx';
 import {
@@ -12,6 +12,7 @@ const SUB_BRANDS = ['', 'Ralleyz', 'Youreka', 'Snapkid', 'Miens', 'KSY', 'Other 
 
 export default function ProjectView() {
   const { projectId } = useParams();
+  const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const [project, setProject] = useState(null);
   const [skus, setSkus] = useState(null);
@@ -116,7 +117,15 @@ export default function ProjectView() {
       {visible?.map((s) => {
         const c = doneCount(s);
         return (
-          <div className="sku-row" key={s.id}>
+          <div
+            className="sku-row"
+            key={s.id}
+            onClick={() => navigate(`/sku/${s.id}`)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate(`/sku/${s.id}`)}
+            aria-label={`Open ${s.product_name}`}
+          >
             <div>
               <Link to={`/sku/${s.id}`} className="name" style={{ color: 'var(--text)' }}>{s.product_name}</Link>
               <div className="codes">

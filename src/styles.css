@@ -261,17 +261,36 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 }
 .rail .node:hover .tip, .rail .node:focus-visible .tip { opacity: 1; }
 
+.rail .node .node-date {
+  position: absolute; bottom: calc(100% + 6px); left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--font-label); font-size: 10px;
+  color: var(--text-dim); pointer-events: none;
+}
+.rail .node .node-label {
+  position: absolute; top: calc(100% + 6px); left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--font-label); font-size: 10px;
+  color: var(--text-faint); pointer-events: none;
+}
+
 /* ---------- SKU table (project view) ---------- */
 .sku-row {
   display: grid;
   grid-template-columns: minmax(220px, 1.2fr) minmax(340px, 2fr) auto;
   gap: 20px; align-items: center;
-  padding: 16px 20px;
+  padding: 24px 20px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--bg-card-dim);
   margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
 }
+.sku-row:hover { border-color: rgba(0, 255, 207, 0.45); background: var(--bg-card); }
+.sku-row:focus-visible { border-color: rgba(0, 255, 207, 0.45); background: var(--bg-card); outline: none; }
 .sku-row .name { font-weight: 600; }
 .sku-row .codes { color: var(--text-faint); font-size: 12px; font-family: var(--font-label); margin-top: 2px; }
 .sku-row .meta { color: var(--text-faint); font-size: 12px; text-align: right; }
