@@ -1,6 +1,7 @@
 // src/pages/Settings.jsx
 import { useAuth } from '../auth/useAuth.jsx';
 import IntegrationsPanel from '../components/IntegrationsPanel.jsx';
+import TestModePanel from '../components/TestModePanel.jsx';
 
 export default function Settings() {
   const { isAdmin } = useAuth();
@@ -28,6 +29,8 @@ export default function Settings() {
       </div>
 
       <IntegrationsPanel />
+
+      <TestModePanel />
 
       <div className="card">
         <span className="eyebrow">Users</span>

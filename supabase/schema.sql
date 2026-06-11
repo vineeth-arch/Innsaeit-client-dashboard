@@ -687,3 +687,13 @@ returns void language sql security definer set search_path = public as $$
   update public.profiles set onboarded = true where id = auth.uid();
 $$;
 grant execute on function public.mark_onboarded() to authenticated;
+
+-- ===== Migration: App settings (TEST_MODE toggle) =====
+-- Run this block in the Supabase SQL Editor against the live project.
+-- Key-value store for server-readable app settings. No RLS policies — only
+-- the service role (server) can read or write rows.
+create table if not exists public.app_settings (
+  key   text primary key,
+  value jsonb not null default 'false'
+);
+alter table public.app_settings enable row level security;

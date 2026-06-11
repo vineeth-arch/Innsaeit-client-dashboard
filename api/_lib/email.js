@@ -9,6 +9,22 @@ export const fromAddress = () => process.env.NOTIFY_FROM || 'onboarding@resend.d
 export const appUrl = () => process.env.APP_URL || 'https://innsaeit-client-dashboard.vercel.app';
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Module-level TTL cache so we don't hit the DB on every email in a burst.
+let _tmCache = null, _tmCacheAt = 0;
+async function isTestMode() {
+  if (process.env.TEST_MODE === 'true') return true; // local-dev env var wins
+  const now = Date.now();
+  if (_tmCache !== null && now - _tmCacheAt < 60_000) return _tmCache;
+  try {
+    const { serviceClient } = await import('./supa.js'); // lazy
+    const { data } = await serviceClient()
+      .from('app_settings').select('value').eq('key', 'test_mode').maybeSingle();
+    const val = data?.value === true || data?.value === 'true';
+    _tmCache = val; _tmCacheAt = now;
+    return val;
+  } catch { return false; }
+}
+
 // Renders a React element and sends one email. Returns {skipped:true} when the
 // API key is missing (warn only — the app must work without email configured).
 // Throws on a Resend error so the caller's per-recipient try/catch records it.
@@ -20,8 +36,8 @@ export async function sendEmail({ to, subject, element }) {
   // TEST_MODE: redirect EVERY send to a single test inbox so the full pipeline
   // (subjects, bodies, data) can run without reaching real recipients. Content
   // is untouched — only the To field changes. Each dropped recipient is logged
-  // so it can be verified in the Vercel logs. Absent/'false' = normal sending.
-  if (process.env.TEST_MODE === 'true') {
+  // so it can be verified in the Vercel logs. Toggle via Settings UI or env var.
+  if (await isTestMode()) {
     const target = process.env.TEST_MODE_RECIPIENT;
     const original = Array.isArray(to) ? to : [to];
     for (const r of original) {

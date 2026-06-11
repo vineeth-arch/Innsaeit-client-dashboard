@@ -455,3 +455,19 @@ export async function checkIntegration(service) {
   if (!res.ok) return { ok: false };
   return res.json();
 }
+
+// ---------- Test mode toggle (admin-only) ----------
+export async function getTestMode() {
+  const res = await fetch('/api/settings/test-mode', { headers: await authHeader() });
+  if (!res.ok) throw new Error('Failed to fetch test mode');
+  return res.json(); // { testMode: bool, recipient: string|null }
+}
+export async function setTestMode(testMode) {
+  const res = await fetch('/api/settings/test-mode', {
+    method: 'POST',
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ testMode }),
+  });
+  if (!res.ok) throw new Error('Failed to update test mode');
+  return res.json();
+}
