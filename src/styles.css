@@ -112,13 +112,13 @@ a:hover { text-decoration: underline; }
 .display {
   font-family: var(--font-display);
   font-style: normal;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  letter-spacing: -0.04em;
 }
 h1, h2 {
   font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  letter-spacing: -0.04em;
 }
 .eyebrow {
   font-family: var(--font-label);
@@ -147,8 +147,8 @@ h1, h2 {
 .topbar .brand { display: flex; align-items: center; gap: 12px; }
 .topbar .brand img { height: 30px; display: block; }
 .topbar .tenant {
-  font-family: var(--font-label); font-size: 12px; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--header-text-dim);
+  font-family: var(--font-label); font-size: 12px; letter-spacing: 0.06em;
+  color: var(--header-text-dim);
   border-left: 1px solid var(--header-line); padding-left: 16px;
 }
 .topbar .spacer { flex: 1; }

@@ -27,7 +27,7 @@ export default function Layout() {
           <img src="/Logo_wordmark_teal%20full.svg" alt="Design Innsaeit"
                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
         </Link>
-        {client && <span className="tenant">{client.name} Tracker</span>}
+        {client && <span className="tenant">{client.theme?.label ?? client.name}</span>}
         {isAdmin && !client && <span className="tenant">Studio Admin</span>}
         <span className="spacer" />
         {isAdmin && <Link to="/settings" className="btn ghost sm">Settings</Link>}
