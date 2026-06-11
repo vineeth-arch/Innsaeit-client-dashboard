@@ -446,3 +446,12 @@ export function isPreviewable(fileName = '', mime = '') {
   return ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'txt'].includes(ext)
     || (mime || '').startsWith('image/');
 }
+
+// ---------- Integrations panel (admin-only health checks) ----------
+// Hits /api/health/{service}; the endpoint returns only booleans/safe metadata
+// (never any secret). Callers wrap this in their own try/catch.
+export async function checkIntegration(service) {
+  const res = await fetch(`/api/health/${service}`, { headers: await authHeader() });
+  if (!res.ok) return { ok: false };
+  return res.json();
+}

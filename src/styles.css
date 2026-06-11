@@ -386,6 +386,45 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .toolrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 
+/* ---------- Settings → Integrations panel ---------- */
+.int-list { display: flex; flex-direction: column; margin-top: 6px; }
+.int-row {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 16px 0; border-top: 1px solid var(--line);
+}
+.int-row:first-child { border-top: none; }
+.int-status, .int-dot-spacer { width: 124px; flex: none; }
+.int-status { display: flex; align-items: center; gap: 7px; margin-top: 2px; }
+.int-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex: none;
+  background: var(--text-dim);
+}
+.int-dot.green { background: var(--mint); box-shadow: 0 0 8px rgba(0, 255, 207, 0.6); }
+.int-dot.amber { background: var(--amber); }
+.int-dot.red   { background: var(--danger); }
+.int-dot.grey  { background: var(--text-dim); opacity: 0.6; }
+.int-state {
+  font-family: var(--font-label); font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim);
+}
+.int-state.green { color: var(--mint); }
+.int-state.amber { color: var(--amber); }
+.int-state.red   { color: var(--danger); }
+:root[data-theme="light"] .int-state.green { color: var(--indigo); }
+:root[data-theme="light"] .int-state.amber { color: #8A5B00; }
+.int-main { flex: 1; min-width: 0; }
+.int-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.int-name { font-weight: 600; }
+.int-sub { color: var(--text-dim); font-size: 12px; }
+.int-note { color: var(--text-dim); font-size: 12.5px; margin: 4px 0 10px; line-height: 1.5; }
+.int-links { display: flex; gap: 8px; flex-wrap: wrap; }
+
+@media (max-width: 560px) {
+  .int-row { flex-direction: column; gap: 8px; }
+  .int-status, .int-dot-spacer { width: auto; }
+  .int-dot-spacer { display: none; }
+}
+
 @media (max-width: 720px) {
   .sku-row { grid-template-columns: 1fr; gap: 10px; }
   .sku-row .meta { text-align: left; }

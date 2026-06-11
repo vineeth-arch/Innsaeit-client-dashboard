@@ -1,5 +1,6 @@
 // src/pages/Settings.jsx
 import { useAuth } from '../auth/useAuth.jsx';
+import IntegrationsPanel from '../components/IntegrationsPanel.jsx';
 
 export default function Settings() {
   const { isAdmin } = useAuth();
@@ -25,6 +26,8 @@ export default function Settings() {
           connect or reconnect here.
         </p>
       </div>
+
+      <IntegrationsPanel />
 
       <div className="card">
         <span className="eyebrow">Users</span>
