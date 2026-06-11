@@ -670,3 +670,18 @@ update public.clients set
   compliance_india_user_id  = (select id from public.profiles where lower(email) = lower('Santosh107.Kumar@ril.com')),
   compliance_global_user_id = (select id from public.profiles where lower(email) = 'eliu@hamleys.com.hk')
 where slug = 'hamleys';
+
+-- ===== Migration: Onboarding tour =====
+-- Run this block in the Supabase SQL Editor against the live project.
+-- 1. Flag on profiles. Existing rows default to false, so everyone gets the
+--    guided tour exactly once after deploy.
+alter table public.profiles add column if not exists onboarded boolean not null default false;
+
+-- 2. Clients cannot UPDATE profiles (admin-only policy), so reuse the
+--    delete_comment pattern: a SECURITY DEFINER function that touches exactly
+--    one column on the caller's own row.
+create or replace function public.mark_onboarded()
+returns void language sql security definer set search_path = public as $$
+  update public.profiles set onboarded = true where id = auth.uid();
+$$;
+grant execute on function public.mark_onboarded() to authenticated;

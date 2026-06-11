@@ -64,7 +64,7 @@ export default function ActivityFeed({ clientId }) {
 
   if (!items?.length) return null;
   return (
-    <div className="card activity-feed">
+    <div className="card activity-feed" data-tour="activity">
       <span className="eyebrow">Recent activity</span>
       <div style={{ marginTop: 6 }}>
         {items.map((it) => (

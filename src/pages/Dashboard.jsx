@@ -67,7 +67,7 @@ export default function Dashboard() {
         <div className="empty">No projects yet. {isAdmin ? 'Create the first batch above.' : ''}</div>
       )}
 
-      <div className="grid-cards">
+      <div className="grid-cards" data-tour="projects">
         {projects?.map((p) => (
           <Link to={`/project/${p.id}`} key={p.id} style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="card clickable">

@@ -20,7 +20,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card" style={{ marginBottom: 16 }} data-tour="onedrive">
         <span className="eyebrow">OneDrive storage</span>
         <p style={{ color: 'var(--text-dim)', margin: '8px 0 14px', fontSize: 13 }}>
           All uploads land in <code>/Innsaeit Tracker/&#123;client&#125;/&#123;project&#125;/&#123;sku&#125;/</code> on

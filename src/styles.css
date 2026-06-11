@@ -421,3 +421,192 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 /* Filled IM badge: manual artwork done */
 .badge.mint-solid { background: var(--mint); border-color: var(--mint); color: var(--ink-deep); }
 :root[data-theme="light"] .badge.mint-solid { color: #14004A; }
+
+/* ============================================================
+   UI POLISH : view transitions, login ripple, hover button,
+   particles, onboarding tour
+   ============================================================ */
+
+/* ---------- view transitions (AnimatedThemeToggler) ---------- */
+/* Kill the default cross-fade; the toggler drives a clip-path reveal instead.
+   These pseudos are NOT matched by the global reduced-motion *,*::before rule. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+/* Sync the transition group's duration with the JS clip animation, and pin the
+   collapsed clip so engines don't flash the new theme unclipped (Firefox). */
+html[data-magicui-theme-vt="active"]::view-transition-group(root) {
+  animation-duration: var(--magicui-theme-toggle-vt-duration);
+}
+
+/* ---------- login: forced dark field + ripple ---------- */
+/* The login screen is always the deep-indigo brand field regardless of the
+   stored theme. Re-declaring the tokens scoped here keeps the card/inputs dark
+   in light mode without touching data-theme. */
+.login-wrap {
+  position: relative;
+  overflow: hidden;
+  background-color: #0D0035;
+  background-image:
+    radial-gradient(1200px 600px at 85% -10%, rgba(44, 0, 152, 0.45), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(44, 0, 152, 0.25), transparent 60%);
+  color: var(--text);
+  --bg-card:   rgba(27, 0, 97, 0.35);
+  --bg-input:  rgba(13, 0, 53, 0.6);
+  --text:      #EDEAFB;
+  --text-dim:  #9D95C7;
+  --text-faint:#6A6299;
+  --line:      rgba(157, 149, 199, 0.18);
+  --ink-deep:  #0D0035;
+}
+.login-stack {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: login-enter 320ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+.login-logo { height: 38px; margin-bottom: 26px; }
+.login-stack .login-card { width: 100%; max-width: none; }
+@keyframes login-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ripple {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 0;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, white, transparent);
+          mask-image: linear-gradient(to bottom, white, transparent);
+}
+.ripple-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px solid;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  animation: ripple 2.8s ease-in-out infinite;
+}
+@keyframes ripple {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50%      { transform: translate(-50%, -50%) scale(0.9); }
+}
+
+/* ---------- interactive hover button ---------- */
+.ihb {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 11px 22px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(27, 0, 97, 0.5);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 200ms ease;
+}
+.ihb:active:not(:disabled) { transform: scale(0.97); transition: transform 120ms ease; }
+.ihb:disabled { opacity: 0.45; cursor: not-allowed; }
+.ihb-base {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 300ms cubic-bezier(0.23, 1, 0.32, 1),
+              opacity 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.ihb-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--mint);
+  transition: transform 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.ihb-hover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #0D0035;
+  opacity: 0;
+  transform: translateX(12px);
+  transition: transform 300ms cubic-bezier(0.23, 1, 0.32, 1),
+              opacity 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.ihb-arrow { display: inline-flex; }
+@media (hover: hover) and (pointer: fine) {
+  .ihb:hover:not(:disabled) .ihb-dot   { transform: scale(100); }
+  .ihb:hover:not(:disabled) .ihb-text  { opacity: 0; transform: translateX(-12px); }
+  .ihb:hover:not(:disabled) .ihb-hover { opacity: 1; transform: translateX(0); }
+}
+
+/* ---------- particles ---------- */
+.particles-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* ---------- onboarding tour ---------- */
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+.tour-overlay.centered {
+  display: grid;
+  place-items: center;
+  background: var(--bg-overlay);
+}
+.tour-spotlight {
+  position: fixed;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px var(--bg-overlay);
+  pointer-events: none;
+}
+.tour-spotlight.placed {
+  transition: top 250ms cubic-bezier(0.23, 1, 0.32, 1),
+              left 250ms cubic-bezier(0.23, 1, 0.32, 1),
+              width 250ms cubic-bezier(0.23, 1, 0.32, 1),
+              height 250ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.tour-pop {
+  position: fixed;
+  max-width: 320px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 18px;
+  outline: none;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 50px rgba(6, 0, 26, 0.45);
+}
+.tour-overlay.centered .tour-pop { position: relative; }
+.tour-pop h3 { font-family: var(--font-display); }
+.tour-dots { display: flex; gap: 6px; margin: 14px 0; }
+.tour-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  opacity: 0.5;
+}
+.tour-dot.active { background: var(--mint); opacity: 1; }

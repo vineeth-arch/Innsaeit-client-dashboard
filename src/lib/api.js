@@ -21,6 +21,13 @@ export async function fetchClient(clientId) {
   return data;
 }
 
+// Onboarding: clients cannot UPDATE their own profile (admin-only policy), so a
+// SECURITY DEFINER RPC flips the flag on the caller's own row. Fire-and-forget.
+export async function markOnboarded() {
+  const { error } = await supabase.rpc('mark_onboarded');
+  if (error) throw error;
+}
+
 export async function fetchClients() {
   const { data } = await supabase.from('clients').select('*').order('name');
   return data || [];

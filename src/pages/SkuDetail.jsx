@@ -355,7 +355,7 @@ export default function SkuDetail() {
               </div>
             )
           )}
-          <div className="toolrow" style={{ marginTop: 10 }}>
+          <div className="toolrow" style={{ marginTop: 10 }} data-tour="request-changes">
             {sku.changes_requested ? (
               <>
                 <span className="badge amber">Changes requested</span>
@@ -368,7 +368,7 @@ export default function SkuDetail() {
             )}
           </div>
           {isAdmin && (
-            <div className="toolrow" style={{ marginTop: 10 }}>
+            <div className="toolrow" style={{ marginTop: 10 }} data-tour="sku-admin-tools">
               <label className="eyebrow" htmlFor="power-type">Power type</label>
               <select id="power-type" value={sku.power_type} onChange={(e) => onPowerType(e.target.value)}
                       style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }}>
@@ -415,7 +415,7 @@ export default function SkuDetail() {
       <div className="detail-grid">
         <div>
           {/* ---------- Files ---------- */}
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card" style={{ marginBottom: 20 }} data-tour="files">
             <div className="toolrow" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
               <span className="eyebrow">Briefs, drafts & links</span>
               {isAdmin && (
@@ -493,7 +493,7 @@ export default function SkuDetail() {
           </div>
 
           {/* ---------- Comments ---------- */}
-          <div className="card">
+          <div className="card" data-tour="comments">
             <span className="eyebrow">Comments</span>
             <div style={{ marginTop: 10 }}>
               {comments.length === 0 && <p style={{ color: 'var(--text-faint)', fontSize: 13 }}>No comments yet.</p>}
@@ -528,7 +528,7 @@ export default function SkuDetail() {
 
         <div>
         {/* ---------- Stage checklist ---------- */}
-        <div className="card">
+        <div className="card" data-tour="pipeline">
           <span className="eyebrow">Pipeline</span>
           <ul className="stage-list" style={{ marginTop: 8 }}>
             {templates.map((t) => {

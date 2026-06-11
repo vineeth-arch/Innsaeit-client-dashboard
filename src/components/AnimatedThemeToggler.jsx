@@ -1,9 +1,12 @@
 // src/components/AnimatedThemeToggler.jsx
-// Adapted from MagicUI's AnimatedThemeToggler. Instead of next-themes it drives
-// our existing data-theme + localStorage mechanism (owned by Layout, passed in
-// as { theme, setTheme }). On supporting browsers it reveals the new theme with
-// a circular clip-path wipe centred on the button via the View Transitions API.
-// Falls back to an instant toggle in Firefox and under reduced motion.
+// Ported from MagicUI's AnimatedThemeToggler (circle variant). Instead of
+// next-themes / a `.dark` class it drives our existing data-theme + localStorage
+// mechanism (owned by Layout, passed in as { theme, setTheme }). On supporting
+// browsers it reveals the new theme with a circular clip-path wipe centred on
+// the button via the View Transitions API; falls back to an instant toggle in
+// Firefox and under reduced motion. The data-attribute + CSS variables pin the
+// collapsed clip-path so engines don't flash the new theme unclipped between the
+// snapshot and the JS animation (source's Firefox-safety technique).
 import { useRef } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -22,41 +25,60 @@ const Moon = () => (
   </svg>
 );
 
+const DURATION = 400;
+
 export default function AnimatedThemeToggler({ theme, setTheme }) {
   const ref = useRef(null);
 
-  async function toggle() {
+  function toggle() {
     const next = theme === 'dark' ? 'light' : 'dark';
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    if (!document.startViewTransition || reduced) {
-      setTheme(next);
+    const apply = () => {
+      // flushSync captures the icon swap in the snapshot; passive effects aren't
+      // guaranteed to flush inside the VT callback, so set the attribute directly.
+      flushSync(() => setTheme(next));
+      document.documentElement.setAttribute('data-theme', next);
+    };
+
+    if (typeof document.startViewTransition !== 'function' || reduced) {
+      apply();
       return;
     }
 
-    const vt = document.startViewTransition(() => {
-      // flushSync captures the icon swap in the snapshot; passive effects aren't
-      // guaranteed to run inside the callback, so set the attribute directly too.
-      flushSync(() => setTheme(next));
-      document.documentElement.setAttribute('data-theme', next);
-    });
+    const root = document.documentElement;
+    const { left, top, width, height } = ref.current.getBoundingClientRect();
+    const x = left + width / 2;
+    const y = top + height / 2;
+    const maxR = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y),
+    );
+    const clip = [`circle(0px at ${x}px ${y}px)`, `circle(${maxR}px at ${x}px ${y}px)`];
 
-    try {
-      await vt.ready;
-      const { left, top, width, height } = ref.current.getBoundingClientRect();
-      const x = left + width / 2;
-      const y = top + height / 2;
-      const maxR = Math.hypot(
-        Math.max(x, window.innerWidth - x),
-        Math.max(y, window.innerHeight - y),
-      );
-      document.documentElement.animate(
-        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${maxR}px at ${x}px ${y}px)`] },
-        { duration: 400, easing: 'ease-in-out', pseudoElement: '::view-transition-new(root)' },
-      );
-    } catch {
-      // Older engines without pseudoElement support: the theme still switched.
-    }
+    root.dataset.magicuiThemeVt = 'active';
+    root.style.setProperty('--magicui-theme-toggle-vt-duration', `${DURATION}ms`);
+    root.style.setProperty('--magicui-theme-vt-clip-from', clip[0]);
+    const cleanup = () => {
+      delete root.dataset.magicuiThemeVt;
+      root.style.removeProperty('--magicui-theme-toggle-vt-duration');
+      root.style.removeProperty('--magicui-theme-vt-clip-from');
+    };
+
+    const vt = document.startViewTransition(apply);
+    if (vt?.finished?.finally) vt.finished.finally(cleanup); else cleanup();
+
+    vt.ready?.then(() => {
+      try {
+        root.animate(
+          { clipPath: clip },
+          { duration: DURATION, easing: 'ease-in-out', fill: 'forwards',
+            pseudoElement: '::view-transition-new(root)' },
+        );
+      } catch {
+        // Older engines without pseudoElement support: the theme still switched.
+      }
+    });
   }
 
   return (
