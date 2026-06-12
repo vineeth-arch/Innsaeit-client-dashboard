@@ -19,3 +19,12 @@ export const EXPORT_OPTIONS = [
   { value: false, label: 'No', tone: 'mint' },
   { value: true, label: 'Yes', tone: 'mint' },
 ];
+
+// Power type drives which compliance checklist items are generated.
+export const POWER_TYPES = [
+  ['unknown', 'Unknown'],
+  ['battery', 'Battery'],
+  ['rechargeable_usb', 'Rechargeable (USB)'],
+  ['non_electronic', 'Non-electronic'],
+  ['ride_on', 'Ride-on'],
+];

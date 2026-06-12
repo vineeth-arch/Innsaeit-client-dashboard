@@ -8,6 +8,7 @@ import SubBrandPicker from '../components/SubBrandPicker.jsx';
 import BentoChoice from '../components/BentoChoice.jsx';
 import SkuEditModal from '../components/SkuEditModal.jsx';
 import ProjectEditModal from '../components/ProjectEditModal.jsx';
+import MultiEditSkusModal from '../components/MultiEditSkusModal.jsx';
 import { PencilIcon, CopyIcon } from '../components/icons.jsx';
 import { COMPLIANCE_OPTIONS, IM_OPTIONS, EXPORT_OPTIONS } from '../lib/skuForm.js';
 import {
@@ -32,6 +33,11 @@ export default function ProjectView() {
   const [editingProject, setEditingProject] = useState(false);
   const [editingSku, setEditingSku] = useState(null);
   const [dupBusyId, setDupBusyId] = useState(null);
+
+  // bulk select + multi-edit state
+  const [selected, setSelected] = useState(() => new Set());
+  const [showMultiEdit, setShowMultiEdit] = useState(false);
+  const [notice, setNotice] = useState('');
   const [copied, setCopied] = useState(false);
   const [err, setErr] = useState('');
   const [checklistSummary, setChecklistSummary] = useState({});
@@ -112,6 +118,30 @@ export default function ProjectView() {
     loadChecklistSummary(list);
   }
 
+  function toggleSelect(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(list) {
+    setSelected((prev) =>
+      prev.size === list.length ? new Set() : new Set(list.map((s) => s.id)));
+  }
+
+  function onApplied(result) {
+    setSelected(new Set());
+    setShowMultiEdit(false);
+    if (result.errors?.length) console.error('Bulk update failures:', result.errors);
+    setNotice(result.failed
+      ? `Updated ${result.updated} of ${result.total} — ${result.failed} failed`
+      : `Updated ${result.total} SKU${result.total === 1 ? '' : 's'}`);
+    setTimeout(() => setNotice(''), 5000);
+    refreshSkus();
+  }
+
   async function onDuplicateSku(e, s) {
     e.stopPropagation();
     setDupBusyId(s.id); setErr('');
@@ -171,7 +201,15 @@ export default function ProjectView() {
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate(`/sku/${s.id}`)}
         aria-label={`Open ${s.product_name}`}
       >
-        <div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          {isAdmin && (
+            <input type="checkbox" checked={selected.has(s.id)}
+                   onClick={(e) => e.stopPropagation()}
+                   onChange={() => toggleSelect(s.id)}
+                   aria-label={`Select ${s.product_name}`}
+                   style={{ width: 'auto', marginTop: 3 }} />
+          )}
+          <div style={{ minWidth: 0 }}>
           <Link to={`/sku/${s.id}`} className="name" style={{ color: 'var(--text)' }}>{s.product_name}</Link>
           <div className="codes">
             {[s.hamleys_sku, s.vendor_item_code].filter(Boolean).join(' · ') || 'No codes yet'}
@@ -197,6 +235,7 @@ export default function ProjectView() {
             {effectiveBuyer(s, project.buyer) && (
               <span className="badge xs">Buyer: {effectiveBuyer(s, project.buyer)}</span>
             )}
+          </div>
           </div>
         </div>
         <StageRail templates={templates} stages={s.sku_stages} canToggle={canToggle} onToggle={onToggle} />
@@ -268,6 +307,19 @@ export default function ProjectView() {
         </div>
       </div>
 
+      {notice && <div className="notice">{notice}</div>}
+
+      {isAdmin && visible?.length > 0 && (
+        <label className="select-all-row">
+          <input type="checkbox"
+                 checked={visible.length > 0 && selected.size === visible.length}
+                 ref={(el) => { if (el) el.indeterminate = selected.size > 0 && selected.size < visible.length; }}
+                 onChange={() => toggleSelectAll(visible)}
+                 style={{ width: 'auto' }} />
+          <span className="eyebrow" style={{ display: 'inline' }}>Select all ({visible.length})</span>
+        </label>
+      )}
+
       {visible?.length === 0 && <div className="empty">No SKUs match.</div>}
 
       {visible?.filter(isActive).map((s) => renderSkuRow(s))}
@@ -277,6 +329,24 @@ export default function ProjectView() {
           <p className="eyebrow" style={{ margin: '24px 0 10px' }}>Done &amp; inactive</p>
           {visible.filter((s) => !isActive(s)).map((s) => renderSkuRow(s, true))}
         </>
+      )}
+
+      {isAdmin && selected.size > 0 && (
+        <div className="bulk-bar">
+          <span className="label">{selected.size} selected</span>
+          <span className="spacer" />
+          <button className="btn primary sm" onClick={() => setShowMultiEdit(true)}>Multi-edit</button>
+          <button className="btn ghost sm" onClick={() => setSelected(new Set())}>Clear</button>
+        </div>
+      )}
+
+      {showMultiEdit && (
+        <MultiEditSkusModal
+          skus={(skus || []).filter((s) => selected.has(s.id))}
+          templates={templates}
+          onClose={() => setShowMultiEdit(false)}
+          onApplied={onApplied}
+        />
       )}
 
       {showNew && (

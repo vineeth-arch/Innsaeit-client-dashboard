@@ -458,6 +458,45 @@ export async function updateSkuImDone(skuId, done) { // admin only via RLS
   if (error) throw error;
 }
 
+// Apply only the properties the admin explicitly enabled to one SKU. Keys
+// absent from `changes` are never written (the "leave unchanged" guarantee).
+async function applySkuChanges(sku, changes) {
+  const update = {};
+  if ('sub_brand' in changes) update.sub_brand = changes.sub_brand || null;
+  if ('buyer_override' in changes) update.buyer_override = changes.buyer_override || null;
+  if ('buyer_email_override' in changes) update.buyer_email_override = changes.buyer_email_override || null;
+  if ('print_vendor' in changes) update.print_vendor = changes.print_vendor || null;
+  if ('power_type' in changes) update.power_type = changes.power_type;
+  if ('has_im' in changes) update.has_im = changes.has_im;
+  if ('compliance_owner' in changes) {
+    update.compliance_owner = changes.compliance_owner;
+    const checkerId = await complianceCheckerId(sku.client_id, changes.compliance_owner);
+    if (checkerId !== undefined) update.compliance_user_id = checkerId;
+  }
+  if (Object.keys(update).length) {
+    const { error } = await supabase.from('skus').update(update).eq('id', sku.id);
+    if (error) throw error;
+  }
+  // Same checklist regeneration the single-SKU power-type / has-IM flow runs.
+  if ('power_type' in changes || 'has_im' in changes) {
+    await generateSkuChecklist(sku.id);
+  }
+  // Tick one chosen stage if it isn't already done. Never unticks, never
+  // touches other stages.
+  if (changes.mark_stage_done) {
+    const row = (sku.sku_stages || []).find((r) => r.stage_key === changes.mark_stage_done);
+    if (row && !row.done) await toggleStage(row, true);
+  }
+}
+
+// Bulk multi-edit. Runs every SKU independently so one failure doesn't block
+// the rest; returns a per-batch result summary. Admin only (RLS enforces it).
+export async function bulkUpdateSkus(skus, changes) {
+  const results = await Promise.allSettled(skus.map((s) => applySkuChanges(s, changes)));
+  const errors = results.filter((r) => r.status === 'rejected').map((r) => r.reason?.message || 'failed');
+  return { total: skus.length, updated: skus.length - errors.length, failed: errors.length, errors };
+}
+
 // Compliance progress for project rows (fetchSkus stays untouched). RLS scopes
 // rows: clients only see compliance items on SKUs assigned to them.
 export async function fetchProjectChecklistSummary(skuIds) {

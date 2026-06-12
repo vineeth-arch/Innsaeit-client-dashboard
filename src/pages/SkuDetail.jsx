@@ -9,7 +9,7 @@ import FormModal, { useUnsavedWarning } from '../components/FormModal.jsx';
 import SkuEditModal from '../components/SkuEditModal.jsx';
 import BentoChoice from '../components/BentoChoice.jsx';
 import { PencilIcon } from '../components/icons.jsx';
-import { IM_OPTIONS } from '../lib/skuForm.js';
+import { IM_OPTIONS, POWER_TYPES } from '../lib/skuForm.js';
 import { STATUS_OPTIONS, statusBadgeClass, STATUS_LABEL } from '../lib/status.js';
 import {
   fetchSku, fetchStageTemplates, fetchFiles, fetchComments, fetchClient,
@@ -27,14 +27,6 @@ import {
 const PINK_STAGES = new Set([
   'final_approved_for_print', 'sent_to_vendor', 'mockup_received', 'in_production',
 ]);
-
-const POWER_TYPES = [
-  ['unknown', 'Unknown'],
-  ['battery', 'Battery'],
-  ['rechargeable_usb', 'Rechargeable (USB)'],
-  ['non_electronic', 'Non-electronic'],
-  ['ride_on', 'Ride-on'],
-];
 
 const KIND_LABEL = {
   brief_text: 'Brief (text)', brief_file: 'Brief', reference: 'Reference',
@@ -546,6 +538,22 @@ export default function SkuDetail() {
         </div>
 
         <div>
+        {/* ---------- Internal (admin) checklist — admin sees this first ---------- */}
+        {isAdmin && (
+          <ChecklistCard
+            accent="amber"
+            title="Internal checklist"
+            chip={<span className="badge amber">INTERNAL — only you see this</span>}
+            items={adminItems}
+            canTick
+            canEdit
+            onToggle={onToggleItem}
+            onAdd={(label) => onAddItem('admin', label)}
+            onDelete={(item) => setDeletingItem(item)}
+            hint={powerHint}
+          />
+        )}
+
         {/* ---------- Stage checklist ---------- */}
         <div className="card" data-tour="pipeline">
           <span className="eyebrow">Pipeline</span>
@@ -591,22 +599,6 @@ export default function SkuDetail() {
             </p>
           )}
         </div>
-
-        {/* ---------- Internal (admin) checklist ---------- */}
-        {isAdmin && (
-          <ChecklistCard
-            accent="amber"
-            title="Internal checklist"
-            chip={<span className="badge amber">INTERNAL — only you see this</span>}
-            items={adminItems}
-            canTick
-            canEdit
-            onToggle={onToggleItem}
-            onAdd={(label) => onAddItem('admin', label)}
-            onDelete={(item) => setDeletingItem(item)}
-            hint={powerHint}
-          />
-        )}
 
         {/* ---------- Compliance checklist ---------- */}
         {(isAdmin || isChecker) && (
