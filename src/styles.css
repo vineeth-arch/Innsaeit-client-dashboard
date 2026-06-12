@@ -38,13 +38,10 @@
 
 /* ---------- dark theme (default) ---------- */
 :root[data-theme="dark"] {
-  --bg-body:      #0D0035;
-  /* top-center indigo glow fading into --ink-deep at the edges, over the two
-     original corner glows */
+  --bg-body:      #020024;
+  /* deep navy → electric blue → white sweep behind the glass panels */
   --bg-body-gradient:
-    radial-gradient(1000px 620px at 50% -12%, rgba(78, 26, 200, 0.42), transparent 62%),
-    radial-gradient(1200px 600px at 85% -10%, rgba(44, 0, 152, 0.45), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(44, 0, 152, 0.25), transparent 60%);
+    linear-gradient(326deg, rgba(2, 0, 36, 1) 0%, rgba(7, 32, 219, 1) 38%, rgba(255, 255, 255, 1) 100%);
   --bg-card:      rgba(27, 0, 97, 0.35);
   --bg-card-dim:  rgba(27, 0, 97, 0.25);
   --bg-input:     rgba(13, 0, 53, 0.6);
@@ -132,7 +129,7 @@ body {
 }
 
 /* film grain — tileable SVG turbulence, inline data-URI (no asset, no network).
-   Paint stack: body gradient → .topo-bg (z -2) → this noise (z -1) → content. */
+   Paint stack: body gradient → this noise (z -1) → content. */
 body::before {
   content: "";
   position: fixed;
@@ -710,19 +707,6 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
   .ihb:hover:not(:disabled) .ihb-dot   { transform: scale(100); }
   .ihb:hover:not(:disabled) .ihb-text  { opacity: 0; transform: translateX(-12px); }
   .ihb:hover:not(:disabled) .ihb-hover { opacity: 1; transform: translateX(0); }
-}
-
-/* ---------- topographic backdrop ---------- */
-/* Static contour pattern behind all post-login content. Sits above the body
-   gradient but below the film-grain overlay (body::before at z -1), below
-   every card (no opaque ancestor inside #root). */
-.topo-bg {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -2;
-  pointer-events: none;
 }
 
 /* ---------- onboarding tour ---------- */

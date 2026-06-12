@@ -3,7 +3,6 @@ import { Outlet, Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/useAuth.jsx';
 import { fetchClient, markOnboarded } from '../lib/api.js';
-import Topography from './Topography.jsx';
 import AnimatedThemeToggler from './AnimatedThemeToggler.jsx';
 import Tour from '../onboarding/Tour.jsx';
 
@@ -43,7 +42,6 @@ export default function Layout() {
 
   return (
     <div className="shell">
-      <Topography theme={theme} />
       <header className="topbar">
         <Link to="/" className="brand" aria-label="Innsaeit Tracker home">
           <img src="/Horizontal_Wordmark_logo.svg" alt="Innsaeit"
