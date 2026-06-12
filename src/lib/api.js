@@ -135,10 +135,30 @@ export async function updateProjectDetails(projectId, { name, vendor, buyer, buy
   if (error) throw error;
 }
 
+// Resolve the email checker (compliance_user_id) from the form's compliance
+// choice, using the tenant's configured mapping: internal → Santosh (India),
+// hamleys_hk_uk → Emily (Global). Returns undefined when the client has no
+// mapping yet (email-digests SQL not run) so callers leave the value untouched
+// rather than clearing a manually-assigned checker.
+async function complianceCheckerId(clientId, complianceOwner) {
+  if (!clientId || !complianceOwner) return undefined;
+  const { data } = await supabase
+    .from('clients')
+    .select('compliance_india_user_id, compliance_global_user_id')
+    .eq('id', clientId).single();
+  if (!data) return undefined;
+  const id = complianceOwner === 'hamleys_hk_uk'
+    ? data.compliance_global_user_id
+    : data.compliance_india_user_id;
+  return id || undefined;
+}
+
 export async function createSku(clientId, projectId, fields) {
+  const row = { client_id: clientId, project_id: projectId, ...fields };
+  const checkerId = await complianceCheckerId(clientId, fields.compliance_owner);
+  if (checkerId !== undefined) row.compliance_user_id = checkerId;
   const { data, error } = await supabase
-    .from('skus').insert({ client_id: clientId, project_id: projectId, ...fields })
-    .select().single();
+    .from('skus').insert(row).select().single();
   if (error) throw error;
   return data;
 }
@@ -168,7 +188,7 @@ export async function updateSkuDetails(skuId, {
   compliance_owner, buyer_override, buyer_email_override, print_vendor,
   second_gate, has_im,
 }) { // admin only via RLS
-  const { error } = await supabase.from('skus').update({
+  const update = {
     product_name,
     hamleys_sku: hamleys_sku || null,
     vendor_item_code: vendor_item_code || null,
@@ -179,7 +199,13 @@ export async function updateSkuDetails(skuId, {
     print_vendor: print_vendor || null,
     second_gate,
     has_im,
-  }).eq('id', skuId);
+  };
+  // Keep the email checker in sync with the compliance choice when the tenant
+  // has a mapping configured (leaves it untouched otherwise).
+  const { data: row } = await supabase.from('skus').select('client_id').eq('id', skuId).single();
+  const checkerId = await complianceCheckerId(row?.client_id, compliance_owner);
+  if (checkerId !== undefined) update.compliance_user_id = checkerId;
+  const { error } = await supabase.from('skus').update(update).eq('id', skuId);
   if (error) throw error;
 }
 
