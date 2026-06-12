@@ -251,6 +251,15 @@ h1, h2 {
 
 /* bulk select header + sticky action bar + result notice */
 .select-all-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; cursor: pointer; }
+/* In multi-select mode the row gains a leading checkbox column; align-items:
+   center on .sku-row vertically centers it against the whole container. */
+.sku-row.selectable { grid-template-columns: auto minmax(220px, 1.2fr) minmax(340px, 2fr) auto; }
+.sku-select {
+  width: 20px; height: 20px;
+  cursor: pointer;
+  accent-color: var(--mint);
+  justify-self: center;
+}
 .bulk-bar {
   position: sticky; bottom: 16px; z-index: 50;
   display: flex; align-items: center; gap: 10px;

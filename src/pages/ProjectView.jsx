@@ -35,9 +35,17 @@ export default function ProjectView() {
   const [dupBusyId, setDupBusyId] = useState(null);
 
   // bulk select + multi-edit state
+  const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [showMultiEdit, setShowMultiEdit] = useState(false);
   const [notice, setNotice] = useState('');
+
+  function toggleSelectMode() {
+    setSelectMode((on) => {
+      if (on) setSelected(new Set()); // leaving select mode clears the selection
+      return !on;
+    });
+  }
   const [copied, setCopied] = useState(false);
   const [err, setErr] = useState('');
   const [checklistSummary, setChecklistSummary] = useState({});
@@ -193,7 +201,7 @@ export default function ProjectView() {
     const c = doneCount(s);
     return (
       <div
-        className={'sku-row' + (inactive ? ' inactive' : '')}
+        className={'sku-row' + (isAdmin && selectMode ? ' selectable' : '') + (inactive ? ' inactive' : '')}
         key={s.id}
         onClick={() => navigate(`/sku/${s.id}`)}
         role="button"
@@ -201,15 +209,13 @@ export default function ProjectView() {
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate(`/sku/${s.id}`)}
         aria-label={`Open ${s.product_name}`}
       >
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-          {isAdmin && (
-            <input type="checkbox" checked={selected.has(s.id)}
-                   onClick={(e) => e.stopPropagation()}
-                   onChange={() => toggleSelect(s.id)}
-                   aria-label={`Select ${s.product_name}`}
-                   style={{ width: 'auto', marginTop: 3 }} />
-          )}
-          <div style={{ minWidth: 0 }}>
+        {isAdmin && selectMode && (
+          <input type="checkbox" className="sku-select" checked={selected.has(s.id)}
+                 onClick={(e) => e.stopPropagation()}
+                 onChange={() => toggleSelect(s.id)}
+                 aria-label={`Select ${s.product_name}`} />
+        )}
+        <div>
           <Link to={`/sku/${s.id}`} className="name" style={{ color: 'var(--text)' }}>{s.product_name}</Link>
           <div className="codes">
             {[s.hamleys_sku, s.vendor_item_code].filter(Boolean).join(' · ') || 'No codes yet'}
@@ -235,7 +241,6 @@ export default function ProjectView() {
             {effectiveBuyer(s, project.buyer) && (
               <span className="badge xs">Buyer: {effectiveBuyer(s, project.buyer)}</span>
             )}
-          </div>
           </div>
         </div>
         <StageRail templates={templates} stages={s.sku_stages} canToggle={canToggle} onToggle={onToggle} />
@@ -303,13 +308,19 @@ export default function ProjectView() {
           <button className="btn" onClick={onCopySummary} disabled={!skus || !templates.length}>
             {copied ? 'Copied' : 'Copy summary'}
           </button>
+          {isAdmin && (
+            <button className={'btn' + (selectMode ? ' primary' : '')} onClick={toggleSelectMode}
+                    aria-pressed={selectMode}>
+              Multi-select
+            </button>
+          )}
           {isAdmin && <button className="btn primary" onClick={() => { setErr(''); setShowNew(true); }}>Add SKU</button>}
         </div>
       </div>
 
       {notice && <div className="notice">{notice}</div>}
 
-      {isAdmin && visible?.length > 0 && (
+      {isAdmin && selectMode && visible?.length > 0 && (
         <label className="select-all-row">
           <input type="checkbox"
                  checked={visible.length > 0 && selected.size === visible.length}
