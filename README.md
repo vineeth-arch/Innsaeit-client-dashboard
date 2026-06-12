@@ -1,116 +1,92 @@
 # Innsaeit Client Dashboard
 
-Multi-tenant artwork pipeline tracker for Design Innsaeit clients.
-First tenant: Hamleys. Each future client is a new row in `clients` plus a
-subdomain, not a new build.
+A multi-tenant artwork & packaging pipeline tracker for a design studio and its
+clients. It replaces the scatter of WhatsApp briefs, email threads, and expiring
+file-transfer links with one live place where every SKU's artwork is tracked from
+the moment files arrive to the moment it goes to print. First tenant: **Hamleys**;
+each future client is a new row in the database plus a subdomain, not a new build.
 
-Stack: Vite + React (SPA) · Supabase (auth + Postgres + RLS) · Vercel
-(hosting + serverless functions) · OneDrive via Microsoft Graph (file storage).
+**Stack:** Vite · React · Supabase (Postgres + Auth + RLS) · Vercel (hosting +
+serverless) · Cloudflare R2 (file storage) · Resend (email).
 
 ---
 
-## 1. Supabase setup (~10 min)
+## What it does
 
-1. Create a project at supabase.com (Mumbai region: `ap-south-1`).
-2. SQL Editor → paste the whole of `supabase/schema.sql` → Run.
-   This creates all tables, RLS policies, the Hamleys tenant, and the
-   14-stage pipeline template.
-3. Authentication → Providers → Email: ensure Email is enabled.
-   Turn OFF "Allow new users to sign up" (users are created by you only).
-4. Project Settings → API: copy the URL, the `anon` key, and the
-   `service_role` key.
+- **Projects → SKUs.** Each project is one batch of products; each SKU is one item
+  with its codes, sub-brand, buyer, and compliance owner.
+- **A 15-stage pipeline** per SKU, from *Files Received* to *In Production*, shown as
+  a visual stage rail you tick as work progresses.
+- **Two-track compliance checklists** — an internal admin pre-flight (only the studio
+  sees it) and a compliance checklist for the assigned checker. Which items appear is
+  driven by the SKU's **power type** (battery, USB-rechargeable, non-electronic,
+  ride-on) and whether it ships with an **instruction manual (IM)**.
+- **Files, links & briefs** — upload artwork straight to cloud storage (100 MB+ `.ai`
+  files are fine), paste WhatsApp briefs as text, or save a transfer link that never expires.
+- **Comments & an activity feed** scoped to each tenant.
+- **Email, without the noise** — one personalized **daily digest** per person at
+  10 AM IST, plus a **single live email** when compliance is approved.
+- **Guided onboarding tour** on first login, and a **light/dark** toggle.
 
-### Create the three users
+## Tech stack
 
-Authentication → Users → Add user (with password) for:
-- you (admin)
-- Neha Gadia
-- the second Hamleys contact
-
-Then Table Editor → `profiles`:
-- set your row: `role = admin`, `full_name`, leave `client_id` null
-- set both client rows: `role = client`, `client_id` = the Hamleys row id
-  from the `clients` table, plus `full_name`.
-
-Passwords are normal email+password, so browsers offer to save them.
-Low friction by design.
-
-## 2. Azure app for OneDrive (~10 min, one time)
-
-Your Microsoft 365 Family plan = consumer OneDrive, so:
-
-1. Go to https://portal.azure.com → Microsoft Entra ID → App registrations
-   → New registration.
-   - Name: `Innsaeit Tracker`
-   - Supported account types: **Personal Microsoft accounts only**
-   - Redirect URI (Web): `https://YOUR-DOMAIN/api/onedrive/auth-callback`
-     (add `http://localhost:3000/api/onedrive/auth-callback` too for local dev)
-2. Certificates & secrets → New client secret → copy the **value** immediately.
-3. API permissions → Microsoft Graph → Delegated → add `Files.ReadWrite`,
-   `offline_access`, `User.Read`.
-4. Copy the Application (client) ID.
-
-## 3. Vercel deploy
-
-1. Push this repo to GitHub, import it in Vercel.
-2. Environment variables (all environments):
-
-| Name | Value |
+| Piece | What it's for |
 |---|---|
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | anon key |
-| `SUPABASE_URL` | same URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | service role key (server only) |
-| `MS_CLIENT_ID` | Azure app client id |
-| `MS_CLIENT_SECRET` | Azure app secret |
+| **Vite + React** | Single-page app (the whole UI under `src/`) |
+| **react-router-dom** | Client-side routing |
+| **Supabase** | Postgres database, email/password auth, and Row Level Security (the browser only ever holds the anon key) |
+| **Vercel** | Static hosting for the SPA, serverless functions under `/api`, and the daily-digest cron |
+| **Cloudflare R2** | S3-compatible object storage for artwork files, accessed via presigned URLs |
+| **Resend** | Transactional email for the digests and the live compliance notice |
+| **@react-email/render** | Renders the email templates to HTML |
 
-3. Deploy. Add the domain `hamleys.designinnsaeit.com` in Vercel → Domains,
-   and a CNAME in your DNS pointing to `cname.vercel-dns.com`.
-4. Log in as admin → Settings → **Connect OneDrive** → sign in with your
-   Microsoft account once. Done. If uploads ever fail with a token error,
-   the same button reconnects.
-
-## 4. Local development
+## Quick start (developers)
 
 ```bash
+git clone <repo-url>
+cd Innsaeit-client-dashboard
 npm install
-cp .env.example .env   # fill in values
-npx vercel dev          # runs Vite + the /api functions together
+cp .env.example .env       # fill in the values — see HANDOFF.md for the full table
+npx vercel dev             # runs the Vite UI *and* the /api functions together
 ```
 
-`npm run dev` alone runs the UI but not the OneDrive functions.
+- `npm run dev` runs the **UI only** (Vite on port 3000) — the `/api` serverless
+  functions won't be available, so uploads and email won't work locally.
+- `npm run build` produces the static site in `dist/`.
+- Requires Node 18+.
 
-## 5. Daily use
+The app needs a Supabase project with `supabase/schema.sql` applied, plus the
+environment variables. Full setup and operations live in **[HANDOFF.md](./HANDOFF.md)**.
 
-- **New batch arrives** → Dashboard → New project → add SKUs (name + codes +
-  sub-brand + compliance owner).
-- **WhatsApp brief** → SKU page → Paste brief text. Renders in-browser as text.
-- **Smash/Playbook/WeTransfer link in an email** → SKU page → Save a link.
-  The link graveyard ends here.
-- **Draft ready** → pick the kind, Upload file. Files chunk-upload straight to
-  OneDrive under `/Innsaeit Tracker/Hamleys/{project}/{sku}/`, so Vercel's
-  upload limits never apply and 100MB+ .ai files are fine.
-- **Tick stages** as they happen. Client logins see everything, can comment,
-  and can tick exactly one box: **Final Approved for Print**. That tick is
-  timestamped with their identity. Keep it; it is your audit trail.
-- PDF / JPG / PNG / PPT / DOC / TXT preview inline. AI / CDR are
-  download-only by browser nature.
+## Project structure
 
-## Adding the next client later
+```
+.
+├── api/                      # Vercel serverless functions (Node)
+│   ├── _lib/                 # shared helpers: r2.js, email.js, supa.js
+│   ├── _emails/              # React-email templates (digests + compliance notice)
+│   ├── cron/daily-digest.js  # the 10 AM IST daily digest job
+│   ├── notify/               # the one live email: compliance-approved
+│   ├── storage/              # R2 presigned upload / view / delete
+│   ├── settings/flags.js     # admin toggles: test mode, pause digests
+│   ├── sku/delete.js         # cascade-delete a SKU + its R2 objects
+│   └── health/               # admin reachability probes (supabase, r2, resend)
+├── src/                      # React SPA
+│   ├── auth/                 # useAuth: Supabase session + profile/role
+│   ├── pages/                # Login, Dashboard, ProjectView, SkuDetail, Settings
+│   ├── components/           # StageRail, ChecklistCard, FileViewer, modals, …
+│   ├── onboarding/           # the guided Tour and its steps
+│   └── lib/                  # api.js (data layer), export.js (CSV), skuForm, status
+├── supabase/schema.sql       # the entire database: tables, RLS, RPCs, triggers, seed
+├── scripts/create_users.mjs  # idempotent Supabase user + profile creation
+├── vercel.json               # build, SPA rewrites, cron schedule
+└── .env.example              # every environment variable, annotated
+```
 
-1. Insert a row in `clients` (name + slug).
-2. Insert their stage templates (copy the Hamleys block in `schema.sql`,
-   adjust stages to their workflow).
-3. Create their users, point a new subdomain at the same Vercel app.
+## Documentation
 
-No code changes.
-
-## Security posture
-
-- Browser uses the anon key only; every table is RLS-gated by tenant.
-- Clients can read their tenant, insert comments, and update only stages
-  whose template says `client_can_toggle = true`.
-- The OneDrive refresh token lives in `integration_tokens`, which has RLS
-  enabled and **zero policies**: only the server (service role) can read it.
-- Serverless endpoints verify the caller's Supabase JWT; uploads are
-  admin-only, viewing requires any valid login.
+- **[HANDOFF.md](./HANDOFF.md)** — for a developer inheriting the system:
+  architecture, data model & RLS, storage, email, env vars, deployment, multi-tenancy,
+  and an operational runbook.
+- **[USER_GUIDE.md](./USER_GUIDE.md)** — for the people using the app: roles, the full
+  artwork-to-print workflow, how-to steps, the daily digest, and troubleshooting.
