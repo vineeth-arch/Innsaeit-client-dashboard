@@ -278,6 +278,19 @@ export function notifyComplianceApproved(skuId) {
     .catch((e) => console.warn('compliance-approved notify failed:', e));
 }
 
+// Fire-and-forget: sent when the first draft file is uploaded for a SKU.
+// Server dedupes permanently (one email per SKU lifetime), so safe to call on
+// every draft upload without risk of duplicate sends.
+export function notifyFirstDraft(skuId) {
+  authHeader()
+    .then((h) => fetch('/api/notify/first-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...h },
+      body: JSON.stringify({ skuId }),
+    }))
+    .catch((e) => console.warn('first-draft notify failed:', e));
+}
+
 // ---------- compliance checklists ----------
 // Client users of a tenant, for the "Compliance checker" select. Admin-only in
 // practice: profiles RLS hides other users' rows from clients, so they get [].

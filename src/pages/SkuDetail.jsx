@@ -13,7 +13,7 @@ import {
   fetchChecklistItems, fetchSkuChecker,
   toggleChecklistItem, generateSkuChecklist, addChecklistItem, deleteChecklistItem,
   updateSkuPowerType, updateSkuComplianceUser, updateSkuHasIm, updateSkuImDone,
-  notifyComplianceApproved, FINAL_COMPLIANCE_LABEL,
+  notifyComplianceApproved, notifyFirstDraft, FINAL_COMPLIANCE_LABEL,
 } from '../lib/api.js';
 
 const PINK_STAGES = new Set([
@@ -150,6 +150,7 @@ export default function SkuDetail() {
       await registerUploadedFile({
         clientId: sku.client_id, skuId: sku.id, kind: uploadKind, title: file.name, file, upload,
       });
+      if (uploadKind === 'draft') notifyFirstDraft(sku.id);
       setProgress(null);
       load();
     } catch (e2) {

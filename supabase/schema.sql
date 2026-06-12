@@ -646,7 +646,7 @@ alter table public.skus     add column if not exists buyer_email_override text;
 --    (the API) only, same pattern as integration_tokens.
 create table if not exists public.digest_log (
   id          uuid primary key default gen_random_uuid(),
-  kind        text not null,   -- admin_digest|supervisor_digest|buyer_digest|checker_digest|compliance_approved
+  kind        text not null,   -- admin_digest|supervisor_digest|buyer_digest|checker_digest|compliance_approved|first_draft_received
   recipient   text not null,
   sku_id      uuid references public.skus(id) on delete set null,
   digest_date date,            -- UTC run date for dailies; NULL for live emails
