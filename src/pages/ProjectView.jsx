@@ -5,10 +5,15 @@ import { useAuth } from '../auth/useAuth.jsx';
 import StageRail from '../components/StageRail.jsx';
 import FormModal from '../components/FormModal.jsx';
 import SubBrandPicker from '../components/SubBrandPicker.jsx';
+import BentoChoice from '../components/BentoChoice.jsx';
+import SkuEditModal from '../components/SkuEditModal.jsx';
+import ProjectEditModal from '../components/ProjectEditModal.jsx';
+import { PencilIcon, CopyIcon } from '../components/icons.jsx';
+import { COMPLIANCE_OPTIONS, IM_OPTIONS, EXPORT_OPTIONS } from '../lib/skuForm.js';
 import {
   fetchProject, fetchSkus, fetchStageTemplates, createSku, toggleStage,
-  updateProjectDetails, effectiveBuyer, fetchProjectChecklistSummary,
-  updateProjectStatus, notifyComplianceApproved,
+  effectiveBuyer, fetchProjectChecklistSummary,
+  updateProjectStatus, notifyComplianceApproved, duplicateSku,
 } from '../lib/api.js';
 import { STATUS_OPTIONS, STATUS_LABEL, statusBadgeClass, isActive } from '../lib/status.js';
 import { buildProjectCsv, downloadCsv, projectCsvFilename, buildProjectSummary } from '../lib/export.js';
@@ -23,9 +28,10 @@ export default function ProjectView() {
   const [filter, setFilter] = useState('');
   const [showNew, setShowNew] = useState(false);
   const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', buyer_email_override: '', has_im: false, print_vendor: '' });
-  // project edit state (the full New-project field set)
+  // project edit + per-row SKU edit/duplicate state
   const [editingProject, setEditingProject] = useState(false);
-  const [pd, setPd] = useState({ name: '', vendor: '', buyer: '', buyer_email: '' });
+  const [editingSku, setEditingSku] = useState(null);
+  const [dupBusyId, setDupBusyId] = useState(null);
   const [copied, setCopied] = useState(false);
   const [err, setErr] = useState('');
   const [checklistSummary, setChecklistSummary] = useState({});
@@ -100,39 +106,22 @@ export default function ProjectView() {
     }
   }
 
-  function projectDraft() {
-    return {
-      name: project.name,
-      vendor: project.vendor || '',
-      buyer: project.buyer || '',
-      buyer_email: project.buyer_email || '',
-    };
+  async function refreshSkus() {
+    const list = await fetchSkus(projectId);
+    setSkus(list);
+    loadChecklistSummary(list);
   }
 
-  function startEditProject() {
-    setErr('');
-    setPd(projectDraft());
-    setEditingProject(true);
-  }
-
-  const projectDirty = editingProject && !!project
-    && Object.entries(projectDraft()).some(([k, v]) => pd[k] !== v);
-
-  async function saveProject() {
-    if (!pd.name.trim()) return;
-    setErr('');
+  async function onDuplicateSku(e, s) {
+    e.stopPropagation();
+    setDupBusyId(s.id); setErr('');
     try {
-      await updateProjectDetails(project.id, {
-        ...pd,
-        name: pd.name.trim(),
-        vendor: pd.vendor.trim(),
-        buyer: pd.buyer.trim(),
-        buyer_email: pd.buyer_email.trim(),
-      });
-      setEditingProject(false);
-      setProject(await fetchProject(projectId)); // refetch so inherited SKU rows update live
-    } catch (e) {
-      setErr(e.message || 'Could not save project.');
+      await duplicateSku(s);
+      await refreshSkus();
+    } catch (e2) {
+      setErr(e2.message || 'Could not duplicate SKU.');
+    } finally {
+      setDupBusyId(null);
     }
   }
 
@@ -189,31 +178,43 @@ export default function ProjectView() {
           </div>
           <div style={{ marginTop: 6 }}>
             {s.status && s.status !== 'active' && (
-              <span className={statusBadgeClass(s.status)}>{STATUS_LABEL[s.status] || s.status}</span>
+              <span className={statusBadgeClass(s.status) + ' xs'}>{STATUS_LABEL[s.status] || s.status}</span>
             )}
-            {s.sub_brand && <span className="badge mint">{s.sub_brand}</span>}
-            <span className="badge">{s.compliance_owner === 'internal' ? 'Compliance: Santosh' : 'Compliance: Hamleys HK/UK'}</span>
-            {s.has_im && (
-              <span className={'badge' + (s.im_done ? ' mint-solid' : '')}
-                    title={s.im_done ? 'Instruction manual artwork done' : 'Instruction manual artwork pending'}>
-                IM
-              </span>
-            )}
+            {s.sub_brand && <span className="badge mint xs">{s.sub_brand}</span>}
+            <span className="badge xs">{s.compliance_owner === 'internal' ? 'Santosh – India' : 'Emily – Global'}</span>
+            <span className={'badge xs' + (s.has_im ? (s.im_done ? ' mint-solid' : ' mint') : ' danger')}
+                  title={s.has_im ? (s.im_done ? 'Instruction manual artwork done' : 'Instruction manual present') : 'No instruction manual'}>
+              IM {s.has_im ? 'Yes' : 'No'}
+            </span>
             {(() => {
               const cs = checklistSummary[s.id];
               return cs && cs.total > 0 && cs.done === cs.total
-                ? <span className="badge mint">✓ Compliance</span>
+                ? <span className="badge mint xs">✓ Compliance</span>
                 : null;
             })()}
-            {s.second_gate && <span className="badge">2nd gate</span>}
-            {s.changes_requested && <span className="badge amber">Changes requested</span>}
+            {s.second_gate && <span className="badge xs">2nd gate</span>}
+            {s.changes_requested && <span className="badge amber xs">Changes requested</span>}
             {effectiveBuyer(s, project.buyer) && (
-              <span className="badge">Buyer: {effectiveBuyer(s, project.buyer)}</span>
+              <span className="badge xs">Buyer: {effectiveBuyer(s, project.buyer)}</span>
             )}
           </div>
         </div>
         <StageRail templates={templates} stages={s.sku_stages} canToggle={canToggle} onToggle={onToggle} />
         <div className="meta">
+          {isAdmin && (
+            <div className="row-actions">
+              <button className="btn ghost sm icon"
+                      onClick={(e) => { e.stopPropagation(); setEditingSku(s); }}
+                      aria-label={`Edit ${s.product_name}`} title="Edit SKU">
+                <PencilIcon />
+              </button>
+              <button className="btn ghost sm icon"
+                      onClick={(e) => onDuplicateSku(e, s)} disabled={dupBusyId === s.id}
+                      aria-label={`Duplicate ${s.product_name}`} title="Duplicate SKU">
+                <CopyIcon />
+              </button>
+            </div>
+          )}
           {c.done}/{c.total} stages
           <div className="progress" style={{ width: 90, marginTop: 6 }}>
             <span style={{ width: `${(c.done / c.total) * 100}%` }} />
@@ -231,12 +232,9 @@ export default function ProjectView() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1 className="display">{project.name}</h1>
             {isAdmin && (
-              <button className="btn ghost sm icon" onClick={startEditProject}
+              <button className="btn ghost sm icon" onClick={() => setEditingProject(true)}
                       aria-label="Edit project details" title="Edit project details">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                </svg>
+                <PencilIcon />
               </button>
             )}
           </div>
@@ -283,12 +281,16 @@ export default function ProjectView() {
 
       {showNew && (
         <FormModal
+          title="Add SKU"
           dirty={!!(f.product_name || f.hamleys_sku || f.vendor_item_code || f.sub_brand
             || f.buyer_override || f.buyer_email_override || f.print_vendor
             || f.second_gate || f.has_im || f.compliance_owner !== 'internal')}
           onClose={() => { setErr(''); setShowNew(false); }}
+          onSave={submitNew}
+          saveLabel="Add SKU"
+          saveDisabled={!f.product_name.trim()}
+          error={err}
         >
-            <h2 className="display" style={{ fontSize: 22, marginBottom: 16 }}>Add SKU</h2>
             <div className="field">
               <label className="eyebrow">Product name</label>
               <input type="text" placeholder="e.g. Color Reveal Mystery" value={f.product_name}
@@ -311,11 +313,14 @@ export default function ProjectView() {
               <SubBrandPicker value={f.sub_brand} onChange={(v) => setF({ ...f, sub_brand: v })} />
             </div>
             <div className="field">
-              <label className="eyebrow">Compliance owner</label>
-              <select value={f.compliance_owner} onChange={(e) => setF({ ...f, compliance_owner: e.target.value })}>
-                <option value="internal">Santosh (internal)</option>
-                <option value="hamleys_hk_uk">Hamleys HK / UK QA</option>
-              </select>
+              <label className="eyebrow">Compliance</label>
+              <BentoChoice options={COMPLIANCE_OPTIONS} value={f.compliance_owner}
+                           onChange={(v) => setF({ ...f, compliance_owner: v })} />
+            </div>
+            <div className="field">
+              <label className="eyebrow">Instruction manual</label>
+              <BentoChoice options={IM_OPTIONS} value={f.has_im}
+                           onChange={(v) => setF({ ...f, has_im: v })} />
             </div>
             <div className="field">
               <label className="eyebrow">Buyer (overrides project buyer)</label>
@@ -332,55 +337,28 @@ export default function ProjectView() {
               <input type="text" placeholder="Where final files go for printing" value={f.print_vendor}
                      onChange={(e) => setF({ ...f, print_vendor: e.target.value })} />
             </div>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
-              <input type="checkbox" checked={f.second_gate}
-                     onChange={(e) => setF({ ...f, second_gate: e.target.checked })}
-                     style={{ width: 'auto' }} />
-              <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Export SKU: needs both compliance gates</span>
-            </label>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, cursor: 'pointer' }}>
-              <input type="checkbox" checked={f.has_im}
-                     onChange={(e) => setF({ ...f, has_im: e.target.checked })}
-                     style={{ width: 'auto' }} />
-              <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Has Instruction Manual</span>
-            </label>
-            {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
-            <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
-              <button className="btn ghost" onClick={() => { setErr(''); setShowNew(false); }}>Cancel</button>
-              <button className="btn primary" onClick={submitNew} disabled={!f.product_name.trim()}>Add SKU</button>
+            <div className="field">
+              <label className="eyebrow">Export SKU: needs both compliance gates</label>
+              <BentoChoice options={EXPORT_OPTIONS} value={f.second_gate}
+                           onChange={(v) => setF({ ...f, second_gate: v })} />
             </div>
         </FormModal>
       )}
 
       {editingProject && (
-        <FormModal dirty={projectDirty} onClose={() => { setErr(''); setEditingProject(false); }}>
-          <h2 className="display" style={{ fontSize: 22, marginBottom: 16 }}>Edit project</h2>
-          <div className="field">
-            <label className="eyebrow">Project name</label>
-            <input type="text" placeholder="e.g. Youreka UNA 7 SKUs" value={pd.name} autoFocus
-                   onChange={(e) => setPd({ ...pd, name: e.target.value })} />
-          </div>
-          <div className="field">
-            <label className="eyebrow">Vendor / factory</label>
-            <input type="text" placeholder="e.g. ChinaAlpha" value={pd.vendor}
-                   onChange={(e) => setPd({ ...pd, vendor: e.target.value })} />
-          </div>
-          <div className="field">
-            <label className="eyebrow">Buyer</label>
-            <input type="text" placeholder="e.g. Lydia" value={pd.buyer}
-                   onChange={(e) => setPd({ ...pd, buyer: e.target.value })} />
-          </div>
-          <div className="field">
-            <label className="eyebrow">Buyer email (for daily digests)</label>
-            <input type="email" placeholder="e.g. lydia@hamleys.com" value={pd.buyer_email}
-                   onChange={(e) => setPd({ ...pd, buyer_email: e.target.value })} />
-          </div>
-          {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
-          <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
-            <button className="btn ghost" onClick={() => { setErr(''); setEditingProject(false); }}>Cancel</button>
-            <button className="btn primary" onClick={saveProject} disabled={!pd.name.trim()}>Save</button>
-          </div>
-        </FormModal>
+        <ProjectEditModal
+          project={project}
+          onClose={() => setEditingProject(false)}
+          onSaved={load}
+        />
+      )}
+
+      {editingSku && (
+        <SkuEditModal
+          sku={editingSku}
+          onClose={() => setEditingSku(null)}
+          onSaved={refreshSkus}
+        />
       )}
     </main>
   );

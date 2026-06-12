@@ -240,15 +240,23 @@ h1, h2 {
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.sm { padding: 5px 12px; font-size: 12px; }
 .btn.icon { padding: 5px 8px; line-height: 0; }
+.btn.wide { min-width: 150px; padding-left: 28px; padding-right: 28px; }
 
-/* ---------- sub-brand bento picker ---------- */
-.subbrand-grid {
+/* form chrome: title left, action row right */
+.form-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+
+/* compact at-a-glance badge + row action cluster */
+.badge.xs { font-size: 9.5px; padding: 1px 6px; }
+.row-actions { display: flex; gap: 4px; justify-content: flex-end; margin-bottom: 6px; }
+
+/* ---------- bento tile selectors (sub-brand, compliance, IM, export) ---------- */
+.bento-grid, .subbrand-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-@media (max-width: 480px) { .subbrand-grid { grid-template-columns: 1fr; } }
-.subbrand-tile {
+@media (max-width: 480px) { .bento-grid, .subbrand-grid { grid-template-columns: 1fr; } }
+.bento-tile, .subbrand-tile {
   font-family: var(--font-label); font-size: 13px; font-weight: 500;
   letter-spacing: 0.02em;
   padding: 9px 12px; border-radius: var(--r-md);
@@ -257,13 +265,23 @@ h1, h2 {
   cursor: pointer; text-align: left;
   transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
-.subbrand-tile:hover { border-color: rgba(0, 255, 207, 0.45); color: var(--text); }
-.subbrand-tile.selected {
+.bento-tile:hover, .subbrand-tile:hover { border-color: rgba(0, 255, 207, 0.45); color: var(--text); }
+/* mint is the default selected tone (sub-brand, compliance, export) */
+.subbrand-tile.selected,
+.bento-tile.selected.tone-mint,
+.bento-tile.selected.tone-green {
   border-color: var(--mint);
   background: var(--mint-dim);
   color: var(--text);
 }
-:root[data-theme="light"] .subbrand-tile.selected { color: var(--indigo); }
+:root[data-theme="light"] .subbrand-tile.selected,
+:root[data-theme="light"] .bento-tile.selected.tone-mint,
+:root[data-theme="light"] .bento-tile.selected.tone-green { color: var(--indigo); }
+.bento-tile.selected.tone-red {
+  border-color: var(--danger);
+  background: rgba(255, 92, 122, 0.14);
+  color: var(--danger);
+}
 
 input[type="text"], input[type="email"], input[type="password"], select, textarea {
   width: 100%;

@@ -4,8 +4,10 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.jsx';
 import ActivityFeed from '../components/ActivityFeed.jsx';
 import FormModal from '../components/FormModal.jsx';
+import ProjectEditModal from '../components/ProjectEditModal.jsx';
+import { PencilIcon } from '../components/icons.jsx';
 import { fetchClients, fetchProjects, createProject } from '../lib/api.js';
-import { isActive } from '../lib/status.js';
+import { isActive, statusBadgeClass, STATUS_LABEL } from '../lib/status.js';
 
 export default function Dashboard() {
   const { profile, isAdmin } = useAuth();
@@ -17,6 +19,7 @@ export default function Dashboard() {
   const [vendor, setVendor] = useState('');
   const [buyer, setBuyer] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
+  const [editingProject, setEditingProject] = useState(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -58,7 +61,16 @@ export default function Dashboard() {
           {p.buyer && (
             <p style={{ color: 'var(--text-dim)', fontSize: 12.5, marginBottom: 12 }}>Buyer: {p.buyer}</p>
           )}
-          <span className={'badge' + (p.status === 'active' ? ' mint' : '')}>{p.status.replace('_', ' ')}</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <span className={statusBadgeClass(p.status) + ' xs'}>{STATUS_LABEL[p.status] || p.status}</span>
+            {isAdmin && (
+              <button className="btn ghost sm icon"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingProject(p); }}
+                      aria-label={`Edit ${p.name}`} title="Edit project">
+                <PencilIcon />
+              </button>
+            )}
+          </div>
         </div>
       </Link>
     );
@@ -108,8 +120,14 @@ export default function Dashboard() {
       {clientId && <ActivityFeed clientId={clientId} />}
 
       {showNew && (
-        <FormModal dirty={!!(name || vendor || buyer || buyerEmail)} onClose={closeNew}>
-          <h2 className="display" style={{ fontSize: 22, marginBottom: 16 }}>New project</h2>
+        <FormModal
+          title="New project"
+          dirty={!!(name || vendor || buyer || buyerEmail)}
+          onClose={closeNew}
+          onSave={submitNew}
+          saveLabel="Create project"
+          saveDisabled={!name.trim()}
+        >
           <div className="field">
             <label className="eyebrow">Project name</label>
             <input type="text" placeholder="e.g. Youreka UNA 7 SKUs" value={name}
@@ -130,11 +148,15 @@ export default function Dashboard() {
             <input type="email" placeholder="e.g. lydia@hamleys.com" value={buyerEmail}
                    onChange={(e) => setBuyerEmail(e.target.value)} />
           </div>
-          <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
-            <button className="btn ghost" onClick={closeNew}>Cancel</button>
-            <button className="btn primary" onClick={submitNew} disabled={!name.trim()}>Create project</button>
-          </div>
         </FormModal>
+      )}
+
+      {editingProject && (
+        <ProjectEditModal
+          project={editingProject}
+          onClose={() => setEditingProject(null)}
+          onSaved={() => fetchProjects(clientId).then(setProjects)}
+        />
       )}
     </main>
   );

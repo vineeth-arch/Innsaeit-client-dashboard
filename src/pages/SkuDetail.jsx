@@ -6,7 +6,10 @@ import FileViewer from '../components/FileViewer.jsx';
 import ChecklistCard from '../components/ChecklistCard.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import FormModal, { useUnsavedWarning } from '../components/FormModal.jsx';
-import SubBrandPicker from '../components/SubBrandPicker.jsx';
+import SkuEditModal from '../components/SkuEditModal.jsx';
+import BentoChoice from '../components/BentoChoice.jsx';
+import { PencilIcon } from '../components/icons.jsx';
+import { IM_OPTIONS } from '../lib/skuForm.js';
 import { STATUS_OPTIONS, statusBadgeClass, STATUS_LABEL } from '../lib/status.js';
 import {
   fetchSku, fetchStageTemplates, fetchFiles, fetchComments, fetchClient,
@@ -17,7 +20,7 @@ import {
   fetchChecklistItems, fetchSkuChecker,
   toggleChecklistItem, generateSkuChecklist, addChecklistItem, deleteChecklistItem,
   updateSkuPowerType, updateSkuComplianceUser, updateSkuHasIm, updateSkuImDone,
-  duplicateSku, updateSkuDetails, updateSkuStatus, deleteSku,
+  duplicateSku, updateSkuStatus, deleteSku,
   notifyComplianceApproved, FINAL_COMPLIANCE_LABEL,
 } from '../lib/api.js';
 
@@ -80,14 +83,9 @@ export default function SkuDetail() {
   const [skuDelErr, setSkuDelErr] = useState('');
   const [skuDelBusy, setSkuDelBusy] = useState(false);
 
-  // duplicate + edit-details state (the full Add-SKU field set)
+  // duplicate + edit-details state
   const [dupBusy, setDupBusy] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
-  const [d, setD] = useState({
-    product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '',
-    compliance_owner: 'internal', buyer_override: '', buyer_email_override: '',
-    print_vendor: '', second_gate: false, has_im: false,
-  });
 
   // compliance checklists state
   const [checklist, setChecklist] = useState([]);
@@ -137,7 +135,8 @@ export default function SkuDetail() {
   }
 
   async function saveText() {
-    if (!body.trim()) return;
+    // A brief can be saved with only the header (title); the description is optional.
+    if (!title.trim() && !body.trim()) return;
     setErr('');
     try {
       await addTextBrief(sku.client_id, sku.id, title.trim() || 'WhatsApp brief', body.trim());
@@ -294,45 +293,6 @@ export default function SkuDetail() {
     finally { setDupBusy(false); }
   }
 
-  function skuDraft() {
-    return {
-      product_name: sku.product_name,
-      hamleys_sku: sku.hamleys_sku || '',
-      vendor_item_code: sku.vendor_item_code || '',
-      sub_brand: sku.sub_brand || '',
-      compliance_owner: sku.compliance_owner || 'internal',
-      buyer_override: sku.buyer_override || '',
-      buyer_email_override: sku.buyer_email_override || '',
-      print_vendor: sku.print_vendor || '',
-      second_gate: !!sku.second_gate,
-      has_im: !!sku.has_im,
-    };
-  }
-
-  function startEditDetails() {
-    setD(skuDraft());
-    setEditingDetails(true);
-  }
-
-  const detailsDirty = editingDetails && !!sku
-    && Object.entries(skuDraft()).some(([k, v]) => d[k] !== v);
-
-  async function saveDetails() {
-    if (!d.product_name.trim()) return;
-    setErr('');
-    try {
-      await updateSkuDetails(sku.id, {
-        ...d,
-        product_name: d.product_name.trim(),
-        buyer_override: d.buyer_override.trim(),
-        buyer_email_override: d.buyer_email_override.trim(),
-        print_vendor: d.print_vendor.trim(),
-      });
-      setEditingDetails(false);
-      load();
-    } catch (e) { setErr(e.message); }
-  }
-
   async function onSkuStatus(status) {
     try { await updateSkuStatus(sku.id, status); load(); } catch (e) { setErr(e.message); }
   }
@@ -371,7 +331,7 @@ export default function SkuDetail() {
           <p className="sub">
             {[sku.hamleys_sku, sku.vendor_item_code].filter(Boolean).join(' · ')}
             {sku.sub_brand ? ` · ${sku.sub_brand}` : ''}
-            {' · '}{sku.compliance_owner === 'internal' ? 'Compliance: Santosh' : 'Compliance: Hamleys HK/UK'}
+            {' · '}{sku.compliance_owner === 'internal' ? 'Compliance: Santosh – India' : 'Compliance: Emily – Global'}
             {sku.second_gate ? ' (+ second gate)' : ''}
             {sku.print_vendor ? ` · Print: ${sku.print_vendor}` : ''}
           </p>
@@ -422,11 +382,12 @@ export default function SkuDetail() {
                   2nd-gate SKU — second approval may need manual checker reassignment after the first gate.
                 </span>
               )}
-              <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-                <input type="checkbox" checked={sku.has_im} style={{ width: 'auto' }}
-                       onChange={(e) => onHasIm(e.target.checked)} />
-                <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Has Instruction Manual</span>
-              </label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <label className="eyebrow">Instruction manual</label>
+                <div style={{ width: 160 }}>
+                  <BentoChoice options={IM_OPTIONS} value={!!sku.has_im} onChange={onHasIm} />
+                </div>
+              </div>
               {sku.has_im && (
                 <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
                   <input type="checkbox" checked={sku.im_done} style={{ width: 'auto' }}
@@ -449,12 +410,9 @@ export default function SkuDetail() {
                       style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }}>
                 {STATUS_OPTIONS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
               </select>
-              <button className="btn ghost sm icon" onClick={startEditDetails}
+              <button className="btn ghost sm icon" onClick={() => setEditingDetails(true)}
                       aria-label="Edit SKU details" title="Edit SKU details">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                </svg>
+                <PencilIcon />
               </button>
               <button className="btn ghost sm" onClick={onDuplicate} disabled={dupBusy}>
                 {dupBusy ? 'Duplicating…' : 'Duplicate'}
@@ -512,7 +470,8 @@ export default function SkuDetail() {
                 </div>
                 <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
                   <button className="btn ghost sm" onClick={() => setMode(null)}>Cancel</button>
-                  <button className="btn primary sm" onClick={saveText} disabled={!body.trim()}>Save brief</button>
+                  <button className="btn primary sm" onClick={saveText}
+                          disabled={!title.trim() && !body.trim()}>Save brief</button>
                 </div>
               </div>
             )}
@@ -670,8 +629,16 @@ export default function SkuDetail() {
       </div>
 
       {showRequest && (
-        <FormModal dirty={!!reason.trim()} onClose={() => setShowRequest(false)}>
-          <h2 className="display" style={{ fontSize: 22, marginBottom: 6 }}>Request changes</h2>
+        <FormModal
+          title="Request changes"
+          dirty={!!reason.trim()}
+          onClose={() => setShowRequest(false)}
+          onSave={submitRequestChanges}
+          saveLabel="Request changes"
+          saveDisabled={!reason.trim()}
+          busy={reqBusy}
+          error={reqErr}
+        >
           <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 14 }}>
             Flags this SKU and posts your reason as a comment. No stages are changed.
           </p>
@@ -680,79 +647,11 @@ export default function SkuDetail() {
             <textarea placeholder="e.g. Barcode panel uses the old logo — please swap to the 2026 version."
                       value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
           </div>
-          {reqErr && <p className="error-text" style={{ marginBottom: 10 }}>{reqErr}</p>}
-          <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
-            <button className="btn ghost" onClick={() => setShowRequest(false)}>Cancel</button>
-            <button className="btn primary" onClick={submitRequestChanges} disabled={!reason.trim() || reqBusy}>
-              {reqBusy ? 'Sending…' : 'Request changes'}
-            </button>
-          </div>
         </FormModal>
       )}
 
       {editingDetails && (
-        <FormModal dirty={detailsDirty} onClose={() => setEditingDetails(false)}>
-          <h2 className="display" style={{ fontSize: 22, marginBottom: 16 }}>Edit SKU details</h2>
-          <div className="field">
-            <label className="eyebrow">Product name</label>
-            <input type="text" value={d.product_name} autoFocus
-                   onChange={(e) => setD({ ...d, product_name: e.target.value })} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div className="field">
-              <label className="eyebrow">Hamleys SKU</label>
-              <input type="text" placeholder="1032883" value={d.hamleys_sku}
-                     onChange={(e) => setD({ ...d, hamleys_sku: e.target.value })} />
-            </div>
-            <div className="field">
-              <label className="eyebrow">Vendor item code</label>
-              <input type="text" placeholder="SK-901B" value={d.vendor_item_code}
-                     onChange={(e) => setD({ ...d, vendor_item_code: e.target.value })} />
-            </div>
-          </div>
-          <div className="field">
-            <label className="eyebrow">Sub-brand</label>
-            <SubBrandPicker value={d.sub_brand} onChange={(v) => setD({ ...d, sub_brand: v })} />
-          </div>
-          <div className="field">
-            <label className="eyebrow">Compliance owner</label>
-            <select value={d.compliance_owner} onChange={(e) => setD({ ...d, compliance_owner: e.target.value })}>
-              <option value="internal">Santosh (internal)</option>
-              <option value="hamleys_hk_uk">Hamleys HK / UK QA</option>
-            </select>
-          </div>
-          <div className="field">
-            <label className="eyebrow">Buyer (overrides project buyer)</label>
-            <input type="text" placeholder="Leave blank to inherit" value={d.buyer_override}
-                   onChange={(e) => setD({ ...d, buyer_override: e.target.value })} />
-          </div>
-          <div className="field">
-            <label className="eyebrow">Buyer email (overrides project)</label>
-            <input type="email" placeholder="Leave blank to inherit" value={d.buyer_email_override}
-                   onChange={(e) => setD({ ...d, buyer_email_override: e.target.value })} />
-          </div>
-          <div className="field">
-            <label className="eyebrow">Print vendor</label>
-            <input type="text" placeholder="Where final files go for printing" value={d.print_vendor}
-                   onChange={(e) => setD({ ...d, print_vendor: e.target.value })} />
-          </div>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
-            <input type="checkbox" checked={d.second_gate}
-                   onChange={(e) => setD({ ...d, second_gate: e.target.checked })}
-                   style={{ width: 'auto' }} />
-            <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Export SKU: needs both compliance gates</span>
-          </label>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, cursor: 'pointer' }}>
-            <input type="checkbox" checked={d.has_im}
-                   onChange={(e) => setD({ ...d, has_im: e.target.checked })}
-                   style={{ width: 'auto' }} />
-            <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Has Instruction Manual</span>
-          </label>
-          <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
-            <button className="btn ghost" onClick={() => setEditingDetails(false)}>Cancel</button>
-            <button className="btn primary" onClick={saveDetails} disabled={!d.product_name.trim()}>Save</button>
-          </div>
-        </FormModal>
+        <SkuEditModal sku={sku} onClose={() => setEditingDetails(false)} onSaved={load} />
       )}
 
       {deletingFile && (
