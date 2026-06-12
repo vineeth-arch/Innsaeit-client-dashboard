@@ -3,14 +3,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.jsx';
 import StageRail from '../components/StageRail.jsx';
+import FormModal from '../components/FormModal.jsx';
 import {
   fetchProject, fetchSkus, fetchStageTemplates, createSku, toggleStage,
   updateProjectBuyer, effectiveBuyer, fetchProjectChecklistSummary,
-  notifyComplianceApproved,
+  updateProjectStatus, notifyComplianceApproved,
 } from '../lib/api.js';
+import { STATUS_OPTIONS, STATUS_LABEL, statusBadgeClass, isActive, SUB_BRANDS } from '../lib/status.js';
 import { buildProjectCsv, downloadCsv, projectCsvFilename, buildProjectSummary } from '../lib/export.js';
-
-const SUB_BRANDS = ['', 'Ralleyz', 'Youreka', 'Snapkid', 'Miens', 'KSY', 'Other / none'];
 
 export default function ProjectView() {
   const { projectId } = useParams();
@@ -117,6 +117,16 @@ export default function ProjectView() {
     }
   }
 
+  async function onProjectStatus(status) {
+    setErr('');
+    try {
+      await updateProjectStatus(project.id, status);
+      setProject(await fetchProject(projectId));
+    } catch (e) {
+      setErr(e.message || 'Could not update status.');
+    }
+  }
+
   function onExportCsv() {
     const csv = buildProjectCsv(project, skus, templates, effectiveBuyer);
     downloadCsv(projectCsvFilename(project), csv);
@@ -140,6 +150,59 @@ export default function ProjectView() {
   }
 
   if (!project) return <main className="page"><p className="eyebrow">Loading…</p></main>;
+
+  function renderSkuRow(s, inactive = false) {
+    const c = doneCount(s);
+    return (
+      <div
+        className={'sku-row' + (inactive ? ' inactive' : '')}
+        key={s.id}
+        onClick={() => navigate(`/sku/${s.id}`)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate(`/sku/${s.id}`)}
+        aria-label={`Open ${s.product_name}`}
+      >
+        <div>
+          <Link to={`/sku/${s.id}`} className="name" style={{ color: 'var(--text)' }}>{s.product_name}</Link>
+          <div className="codes">
+            {[s.hamleys_sku, s.vendor_item_code].filter(Boolean).join(' · ') || 'No codes yet'}
+          </div>
+          <div style={{ marginTop: 6 }}>
+            {s.status && s.status !== 'active' && (
+              <span className={statusBadgeClass(s.status)}>{STATUS_LABEL[s.status] || s.status}</span>
+            )}
+            {s.sub_brand && <span className="badge mint">{s.sub_brand}</span>}
+            <span className="badge">{s.compliance_owner === 'internal' ? 'Compliance: Santosh' : 'Compliance: Hamleys HK/UK'}</span>
+            {s.has_im && (
+              <span className={'badge' + (s.im_done ? ' mint-solid' : '')}
+                    title={s.im_done ? 'Instruction manual artwork done' : 'Instruction manual artwork pending'}>
+                IM
+              </span>
+            )}
+            {(() => {
+              const cs = checklistSummary[s.id];
+              return cs && cs.total > 0 && cs.done === cs.total
+                ? <span className="badge mint">✓ Compliance</span>
+                : null;
+            })()}
+            {s.second_gate && <span className="badge">2nd gate</span>}
+            {s.changes_requested && <span className="badge amber">Changes requested</span>}
+            {effectiveBuyer(s, project.buyer) && (
+              <span className="badge">Buyer: {effectiveBuyer(s, project.buyer)}</span>
+            )}
+          </div>
+        </div>
+        <StageRail templates={templates} stages={s.sku_stages} canToggle={canToggle} onToggle={onToggle} />
+        <div className="meta">
+          {c.done}/{c.total} stages
+          <div className="progress" style={{ width: 90, marginTop: 6 }}>
+            <span style={{ width: `${(c.done / c.total) * 100}%` }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <main className="page">
@@ -172,6 +235,16 @@ export default function ProjectView() {
           )}
         </div>
         <div className="toolrow">
+          {isAdmin ? (
+            <select value={project.status} onChange={(e) => onProjectStatus(e.target.value)}
+                    aria-label="Project status" style={{ width: 'auto' }}>
+              {STATUS_OPTIONS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+            </select>
+          ) : (
+            project.status !== 'active' && (
+              <span className={statusBadgeClass(project.status)}>{STATUS_LABEL[project.status] || project.status}</span>
+            )
+          )}
           <input type="text" placeholder="Search SKU, code, sub-brand…" value={filter}
                  onChange={(e) => setFilter(e.target.value)} style={{ width: 240 }} />
           <button className="btn" onClick={onExportCsv} disabled={!skus || !templates.length}>Export CSV</button>
@@ -184,59 +257,22 @@ export default function ProjectView() {
 
       {visible?.length === 0 && <div className="empty">No SKUs match.</div>}
 
-      {visible?.map((s) => {
-        const c = doneCount(s);
-        return (
-          <div
-            className="sku-row"
-            key={s.id}
-            onClick={() => navigate(`/sku/${s.id}`)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate(`/sku/${s.id}`)}
-            aria-label={`Open ${s.product_name}`}
-          >
-            <div>
-              <Link to={`/sku/${s.id}`} className="name" style={{ color: 'var(--text)' }}>{s.product_name}</Link>
-              <div className="codes">
-                {[s.hamleys_sku, s.vendor_item_code].filter(Boolean).join(' · ') || 'No codes yet'}
-              </div>
-              <div style={{ marginTop: 6 }}>
-                {s.sub_brand && <span className="badge mint">{s.sub_brand}</span>}
-                <span className="badge">{s.compliance_owner === 'internal' ? 'Compliance: Santosh' : 'Compliance: Hamleys HK/UK'}</span>
-                {s.has_im && (
-                  <span className={'badge' + (s.im_done ? ' mint-solid' : '')}
-                        title={s.im_done ? 'Instruction manual artwork done' : 'Instruction manual artwork pending'}>
-                    IM
-                  </span>
-                )}
-                {(() => {
-                  const cs = checklistSummary[s.id];
-                  return cs && cs.total > 0 && cs.done === cs.total
-                    ? <span className="badge mint">✓ Compliance</span>
-                    : null;
-                })()}
-                {s.second_gate && <span className="badge">2nd gate</span>}
-                {s.changes_requested && <span className="badge amber">Changes requested</span>}
-                {effectiveBuyer(s, project.buyer) && (
-                  <span className="badge">Buyer: {effectiveBuyer(s, project.buyer)}</span>
-                )}
-              </div>
-            </div>
-            <StageRail templates={templates} stages={s.sku_stages} canToggle={canToggle} onToggle={onToggle} />
-            <div className="meta">
-              {c.done}/{c.total} stages
-              <div className="progress" style={{ width: 90, marginTop: 6 }}>
-                <span style={{ width: `${(c.done / c.total) * 100}%` }} />
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      {visible?.filter(isActive).map((s) => renderSkuRow(s))}
+
+      {(visible?.filter((s) => !isActive(s)).length ?? 0) > 0 && (
+        <>
+          <p className="eyebrow" style={{ margin: '24px 0 10px' }}>Done &amp; inactive</p>
+          {visible.filter((s) => !isActive(s)).map((s) => renderSkuRow(s, true))}
+        </>
+      )}
 
       {showNew && (
-        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setShowNew(false)}>
-          <div className="card modal">
+        <FormModal
+          dirty={!!(f.product_name || f.hamleys_sku || f.vendor_item_code || f.sub_brand
+            || f.buyer_override || f.buyer_email_override || f.print_vendor
+            || f.second_gate || f.has_im || f.compliance_owner !== 'internal')}
+          onClose={() => { setErr(''); setShowNew(false); }}
+        >
             <h2 className="display" style={{ fontSize: 22, marginBottom: 16 }}>Add SKU</h2>
             <div className="field">
               <label className="eyebrow">Product name</label>
@@ -300,8 +336,7 @@ export default function ProjectView() {
               <button className="btn ghost" onClick={() => { setErr(''); setShowNew(false); }}>Cancel</button>
               <button className="btn primary" onClick={submitNew} disabled={!f.product_name.trim()}>Add SKU</button>
             </div>
-          </div>
-        </div>
+        </FormModal>
       )}
     </main>
   );

@@ -485,6 +485,13 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 .badge.amber { border-color: rgba(255, 198, 92, 0.45); color: var(--amber); background: rgba(255, 198, 92, 0.12); }
 :root[data-theme="light"] .badge.amber { color: #8A5B00; }
 
+/* Cancelled status */
+.badge.danger { border-color: rgba(255, 92, 122, 0.45); color: var(--danger); background: rgba(255, 92, 122, 0.10); }
+
+/* Done / archived / cancelled projects and SKUs sink into a dimmed group */
+.card.inactive, .sku-row.inactive { opacity: 0.6; }
+.card.inactive:hover, .sku-row.inactive:hover, .sku-row.inactive:focus-visible { opacity: 1; }
+
 .activity-feed { margin-top: 24px; }
 .activity-row {
   display: flex; align-items: baseline; gap: 12px;

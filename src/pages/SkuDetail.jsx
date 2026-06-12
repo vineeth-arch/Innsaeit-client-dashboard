@@ -1,9 +1,12 @@
 // src/pages/SkuDetail.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.jsx';
 import FileViewer from '../components/FileViewer.jsx';
 import ChecklistCard from '../components/ChecklistCard.jsx';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import FormModal, { useUnsavedWarning } from '../components/FormModal.jsx';
+import { STATUS_OPTIONS, statusBadgeClass, STATUS_LABEL, SUB_BRANDS } from '../lib/status.js';
 import {
   fetchSku, fetchStageTemplates, fetchFiles, fetchComments, fetchClient,
   toggleStage, addTextBrief, addExternalLink, addComment, deleteComment,
@@ -13,6 +16,7 @@ import {
   fetchChecklistItems, fetchSkuChecker,
   toggleChecklistItem, generateSkuChecklist, addChecklistItem, deleteChecklistItem,
   updateSkuPowerType, updateSkuComplianceUser, updateSkuHasIm, updateSkuImDone,
+  duplicateSku, updateSkuDetails, updateSkuStatus, deleteSku,
   notifyComplianceApproved, FINAL_COMPLIANCE_LABEL,
 } from '../lib/api.js';
 
@@ -36,6 +40,7 @@ const KIND_LABEL = {
 
 export default function SkuDetail() {
   const { skuId } = useParams();
+  const navigate = useNavigate();
   const { profile, isAdmin } = useAuth();
   const [sku, setSku] = useState(null);
   const [templates, setTemplates] = useState([]);
@@ -76,10 +81,26 @@ export default function SkuDetail() {
   const [deleteErr,    setDeleteErr]    = useState('');
   const [deleteBusy,   setDeleteBusy]   = useState(false);
 
+  // confirm-before-delete state for comments, checklist items, and the SKU
+  const [deletingComment, setDeletingComment] = useState(null);
+  const [deletingItem, setDeletingItem] = useState(null);
+  const [deletingSku, setDeletingSku] = useState(false);
+  const [skuDelErr, setSkuDelErr] = useState('');
+  const [skuDelBusy, setSkuDelBusy] = useState(false);
+
+  // duplicate + edit-details state
+  const [dupBusy, setDupBusy] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [d, setD] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '' });
+
   // compliance checklists state
   const [checklist, setChecklist] = useState([]);
   const [checker, setChecker] = useState(null);
   const [client, setClient] = useState(null); // tenant row: compliance market → checker mapping
+
+  // Half-typed text is work too — warn on reload/tab-close while a comment or
+  // inline brief/link draft has content. (Modal forms guard themselves.)
+  useUnsavedWarning(!!newComment.trim() || !!body.trim());
 
   async function load() {
     setLoadErr('');
@@ -262,15 +283,20 @@ export default function SkuDetail() {
     try { await addChecklistItem(sku.client_id, sku.id, audience, label, nextPos); load(); } catch (e) { setErr(e.message); }
   }
 
-  async function onDeleteItem(item) {
-    try { await deleteChecklistItem(item.id); load(); } catch (e) { setErr(e.message); }
+  async function onDeleteItem() {
+    try {
+      await deleteChecklistItem(deletingItem.id);
+      setDeletingItem(null);
+      load();
+    } catch (e) { setErr(e.message); setDeletingItem(null); }
   }
 
-  async function onDeleteComment(id) {
+  async function onDeleteComment() {
     try {
-      await deleteComment(id);
+      await deleteComment(deletingComment.id);
+      setDeletingComment(null);
       setComments(await fetchComments(skuId));
-    } catch (e) { setErr(e.message); }
+    } catch (e) { setErr(e.message); setDeletingComment(null); }
   }
 
   async function onDeleteFile() {
@@ -281,6 +307,59 @@ export default function SkuDetail() {
       setDeletingFile(null);
     } catch (e) { setDeleteErr(e.message); }
     finally { setDeleteBusy(false); }
+  }
+
+  async function onDeleteSku() {
+    setSkuDelBusy(true); setSkuDelErr('');
+    try {
+      const projectId = sku.project_id;
+      await deleteSku(sku.id);
+      navigate(`/project/${projectId}`);
+    } catch (e) { setSkuDelErr(e.message); setSkuDelBusy(false); }
+  }
+
+  async function onDuplicate() {
+    setDupBusy(true); setErr('');
+    try {
+      const copy = await duplicateSku(sku);
+      navigate(`/sku/${copy.id}`);
+    } catch (e) { setErr(e.message); }
+    finally { setDupBusy(false); }
+  }
+
+  function startEditDetails() {
+    setD({
+      product_name: sku.product_name,
+      hamleys_sku: sku.hamleys_sku || '',
+      vendor_item_code: sku.vendor_item_code || '',
+      sub_brand: sku.sub_brand || '',
+    });
+    setEditingDetails(true);
+  }
+
+  const detailsDirty = editingDetails && (
+    d.product_name !== sku?.product_name
+    || d.hamleys_sku !== (sku?.hamleys_sku || '')
+    || d.vendor_item_code !== (sku?.vendor_item_code || '')
+    || d.sub_brand !== (sku?.sub_brand || '')
+  );
+
+  async function saveDetails() {
+    if (!d.product_name.trim()) return;
+    setErr('');
+    try {
+      await updateSkuDetails(sku.id, {
+        ...d,
+        product_name: d.product_name.trim(),
+        sub_brand: d.sub_brand === 'Other / none' ? null : d.sub_brand || null,
+      });
+      setEditingDetails(false);
+      load();
+    } catch (e) { setErr(e.message); }
+  }
+
+  async function onSkuStatus(status) {
+    try { await updateSkuStatus(sku.id, status); load(); } catch (e) { setErr(e.message); }
   }
 
   async function submitComment() {
@@ -369,6 +448,9 @@ export default function SkuDetail() {
             )
           )}
           <div className="toolrow" style={{ marginTop: 10 }} data-tour="request-changes">
+            {sku.status && sku.status !== 'active' && (
+              <span className={statusBadgeClass(sku.status)}>{STATUS_LABEL[sku.status] || sku.status}</span>
+            )}
             {sku.changes_requested ? (
               <>
                 <span className="badge amber">Changes requested</span>
@@ -420,6 +502,22 @@ export default function SkuDetail() {
                 </label>
               )}
               <button className="btn ghost sm" onClick={onLoadChecklist}>Load checklist</button>
+            </div>
+          )}
+          {isAdmin && (
+            <div className="toolrow" style={{ marginTop: 10 }}>
+              <label className="eyebrow" htmlFor="sku-status">Status</label>
+              <select id="sku-status" value={sku.status || 'active'} onChange={(e) => onSkuStatus(e.target.value)}
+                      style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }}>
+                {STATUS_OPTIONS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+              </select>
+              <button className="btn ghost sm" onClick={startEditDetails}>Edit details</button>
+              <button className="btn ghost sm" onClick={onDuplicate} disabled={dupBusy}>
+                {dupBusy ? 'Duplicating…' : 'Duplicate'}
+              </button>
+              <button className="btn danger sm" onClick={() => { setSkuDelErr(''); setDeletingSku(true); }}>
+                Delete SKU
+              </button>
             </div>
           )}
         </div>
@@ -525,7 +623,7 @@ export default function SkuDetail() {
                     {isDeleted
                       ? <span className="deleted-pill">deleted{c.deleter ? ` by ${c.deleter.full_name || c.deleter.email}` : ''}</span>
                       : canDelete && (
-                        <button className="btn ghost sm comment-delete" onClick={() => onDeleteComment(c.id)} aria-label="Delete comment">×</button>
+                        <button className="btn ghost sm comment-delete" onClick={() => setDeletingComment(c)} aria-label="Delete comment">×</button>
                       )
                     }
                     <p className="body">{c.body}</p>
@@ -602,7 +700,7 @@ export default function SkuDetail() {
             canEdit
             onToggle={onToggleItem}
             onAdd={(label) => onAddItem('admin', label)}
-            onDelete={onDeleteItem}
+            onDelete={(item) => setDeletingItem(item)}
             hint={powerHint}
           />
         )}
@@ -620,7 +718,7 @@ export default function SkuDetail() {
             canEdit={isAdmin}
             onToggle={onToggleItem}
             onAdd={(label) => onAddItem('compliance', label)}
-            onDelete={onDeleteItem}
+            onDelete={(item) => setDeletingItem(item)}
             hint={powerHint}
           />
         )}
@@ -628,44 +726,93 @@ export default function SkuDetail() {
       </div>
 
       {showRequest && (
-        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setShowRequest(false)}>
-          <div className="card modal">
-            <h2 className="display" style={{ fontSize: 22, marginBottom: 6 }}>Request changes</h2>
-            <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 14 }}>
-              Flags this SKU and posts your reason as a comment. No stages are changed.
-            </p>
+        <FormModal dirty={!!reason.trim()} onClose={() => setShowRequest(false)}>
+          <h2 className="display" style={{ fontSize: 22, marginBottom: 6 }}>Request changes</h2>
+          <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 14 }}>
+            Flags this SKU and posts your reason as a comment. No stages are changed.
+          </p>
+          <div className="field">
+            <label className="eyebrow">What needs changing?</label>
+            <textarea placeholder="e.g. Barcode panel uses the old logo — please swap to the 2026 version."
+                      value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
+          </div>
+          {reqErr && <p className="error-text" style={{ marginBottom: 10 }}>{reqErr}</p>}
+          <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn ghost" onClick={() => setShowRequest(false)}>Cancel</button>
+            <button className="btn primary" onClick={submitRequestChanges} disabled={!reason.trim() || reqBusy}>
+              {reqBusy ? 'Sending…' : 'Request changes'}
+            </button>
+          </div>
+        </FormModal>
+      )}
+
+      {editingDetails && (
+        <FormModal dirty={detailsDirty} onClose={() => setEditingDetails(false)}>
+          <h2 className="display" style={{ fontSize: 22, marginBottom: 16 }}>Edit SKU details</h2>
+          <div className="field">
+            <label className="eyebrow">Product name</label>
+            <input type="text" value={d.product_name} autoFocus
+                   onChange={(e) => setD({ ...d, product_name: e.target.value })} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="field">
-              <label className="eyebrow">What needs changing?</label>
-              <textarea placeholder="e.g. Barcode panel uses the old logo — please swap to the 2026 version."
-                        value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
+              <label className="eyebrow">Hamleys SKU</label>
+              <input type="text" placeholder="1032883" value={d.hamleys_sku}
+                     onChange={(e) => setD({ ...d, hamleys_sku: e.target.value })} />
             </div>
-            {reqErr && <p className="error-text" style={{ marginBottom: 10 }}>{reqErr}</p>}
-            <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
-              <button className="btn ghost" onClick={() => setShowRequest(false)}>Cancel</button>
-              <button className="btn primary" onClick={submitRequestChanges} disabled={!reason.trim() || reqBusy}>
-                {reqBusy ? 'Sending…' : 'Request changes'}
-              </button>
+            <div className="field">
+              <label className="eyebrow">Vendor item code</label>
+              <input type="text" placeholder="SK-901B" value={d.vendor_item_code}
+                     onChange={(e) => setD({ ...d, vendor_item_code: e.target.value })} />
             </div>
           </div>
-        </div>
+          <div className="field">
+            <label className="eyebrow">Sub-brand</label>
+            <select value={d.sub_brand} onChange={(e) => setD({ ...d, sub_brand: e.target.value })}>
+              {SUB_BRANDS.map((b) => <option key={b} value={b}>{b || 'Select…'}</option>)}
+            </select>
+          </div>
+          <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn ghost" onClick={() => setEditingDetails(false)}>Cancel</button>
+            <button className="btn primary" onClick={saveDetails} disabled={!d.product_name.trim()}>Save</button>
+          </div>
+        </FormModal>
       )}
 
       {deletingFile && (
-        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setDeletingFile(null)}>
-          <div className="card modal">
-            <h2 className="display" style={{ fontSize: 22, marginBottom: 6 }}>Delete file?</h2>
-            <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 14 }}>
-              <strong>{deletingFile.title}</strong> will be permanently removed. This cannot be undone.
-            </p>
-            {deleteErr && <p className="error-text" style={{ marginBottom: 10 }}>{deleteErr}</p>}
-            <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
-              <button className="btn ghost" onClick={() => setDeletingFile(null)}>Cancel</button>
-              <button className="btn danger" onClick={onDeleteFile} disabled={deleteBusy}>
-                {deleteBusy ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Delete file?"
+          message={<><strong>{deletingFile.title}</strong> will be permanently removed. This cannot be undone.</>}
+          busy={deleteBusy} error={deleteErr}
+          onCancel={() => setDeletingFile(null)} onConfirm={onDeleteFile}
+        />
+      )}
+
+      {deletingComment && (
+        <ConfirmDialog
+          title="Delete comment?"
+          message={<>The comment by <strong>{deletingComment.profiles?.full_name || deletingComment.profiles?.email}</strong> will be marked as deleted for everyone.</>}
+          onCancel={() => setDeletingComment(null)} onConfirm={onDeleteComment}
+        />
+      )}
+
+      {deletingItem && (
+        <ConfirmDialog
+          title="Remove checklist item?"
+          message={<><strong>{deletingItem.label}</strong> will be removed from this SKU's checklist. This cannot be undone.</>}
+          confirmLabel="Remove"
+          onCancel={() => setDeletingItem(null)} onConfirm={onDeleteItem}
+        />
+      )}
+
+      {deletingSku && (
+        <ConfirmDialog
+          title="Delete SKU?"
+          message={<><strong>{sku.product_name}</strong> and all of its stages, files, comments and checklists will be permanently removed. This cannot be undone.</>}
+          confirmLabel="Delete SKU"
+          busy={skuDelBusy} error={skuDelErr}
+          onCancel={() => setDeletingSku(false)} onConfirm={onDeleteSku}
+        />
       )}
 
       {viewing && <FileViewer file={viewing} onClose={() => setViewing(null)} />}

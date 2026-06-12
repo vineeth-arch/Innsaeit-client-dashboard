@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.jsx';
 import ActivityFeed from '../components/ActivityFeed.jsx';
+import FormModal from '../components/FormModal.jsx';
 import { fetchClients, fetchProjects, createProject } from '../lib/api.js';
+import { isActive } from '../lib/status.js';
 
 export default function Dashboard() {
   const { profile, isAdmin } = useAuth();
@@ -39,6 +41,29 @@ export default function Dashboard() {
     fetchProjects(clientId).then(setProjects);
   }
 
+  function closeNew() {
+    setName(''); setVendor(''); setBuyer(''); setBuyerEmail(''); setShowNew(false);
+  }
+
+  function renderProjectCard(p, inactive = false) {
+    return (
+      <Link to={`/project/${p.id}`} key={p.id} style={{ textDecoration: 'none', color: 'inherit' }}>
+        <div className={'card clickable' + (inactive ? ' inactive' : '')}>
+          <p className="eyebrow">{p.vendor || 'Vendor TBC'}</p>
+          <h3 className="display" style={{ fontSize: 20, margin: '6px 0 10px' }}>{p.name}</h3>
+          <p style={{ color: 'var(--text-dim)', fontSize: 12.5, marginBottom: 12 }}>
+            {p.skus?.length || 0} SKU{(p.skus?.length || 0) === 1 ? '' : 's'}
+            {' · '}updated {new Date(p.updated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+          </p>
+          {p.buyer && (
+            <p style={{ color: 'var(--text-dim)', fontSize: 12.5, marginBottom: 12 }}>Buyer: {p.buyer}</p>
+          )}
+          <span className={'badge' + (p.status === 'active' ? ' mint' : '')}>{p.status.replace('_', ' ')}</span>
+        </div>
+      </Link>
+    );
+  }
+
   return (
     <main className="page">
       <div className="page-head">
@@ -68,56 +93,48 @@ export default function Dashboard() {
       )}
 
       <div className="grid-cards" data-tour="projects">
-        {projects?.map((p) => (
-          <Link to={`/project/${p.id}`} key={p.id} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="card clickable">
-              <p className="eyebrow">{p.vendor || 'Vendor TBC'}</p>
-              <h3 className="display" style={{ fontSize: 20, margin: '6px 0 10px' }}>{p.name}</h3>
-              <p style={{ color: 'var(--text-dim)', fontSize: 12.5, marginBottom: 12 }}>
-                {p.skus?.length || 0} SKU{(p.skus?.length || 0) === 1 ? '' : 's'}
-                {' · '}updated {new Date(p.updated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-              </p>
-              {p.buyer && (
-                <p style={{ color: 'var(--text-dim)', fontSize: 12.5, marginBottom: 12 }}>Buyer: {p.buyer}</p>
-              )}
-              <span className={'badge' + (p.status === 'active' ? ' mint' : '')}>{p.status.replace('_', ' ')}</span>
-            </div>
-          </Link>
-        ))}
+        {projects?.filter(isActive).map((p) => renderProjectCard(p))}
       </div>
+
+      {(projects?.filter((p) => !isActive(p)).length ?? 0) > 0 && (
+        <>
+          <p className="eyebrow" style={{ margin: '28px 0 12px' }}>Done &amp; inactive</p>
+          <div className="grid-cards">
+            {projects.filter((p) => !isActive(p)).map((p) => renderProjectCard(p, true))}
+          </div>
+        </>
+      )}
 
       {clientId && <ActivityFeed clientId={clientId} />}
 
       {showNew && (
-        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setShowNew(false)}>
-          <div className="card modal">
-            <h2 className="display" style={{ fontSize: 22, marginBottom: 16 }}>New project</h2>
-            <div className="field">
-              <label className="eyebrow">Project name</label>
-              <input type="text" placeholder="e.g. Youreka UNA 7 SKUs" value={name}
-                     onChange={(e) => setName(e.target.value)} autoFocus />
-            </div>
-            <div className="field">
-              <label className="eyebrow">Vendor / factory</label>
-              <input type="text" placeholder="e.g. ChinaAlpha" value={vendor}
-                     onChange={(e) => setVendor(e.target.value)} />
-            </div>
-            <div className="field">
-              <label className="eyebrow">Buyer</label>
-              <input type="text" placeholder="e.g. Lydia" value={buyer}
-                     onChange={(e) => setBuyer(e.target.value)} />
-            </div>
-            <div className="field">
-              <label className="eyebrow">Buyer email (for daily digests)</label>
-              <input type="email" placeholder="e.g. lydia@hamleys.com" value={buyerEmail}
-                     onChange={(e) => setBuyerEmail(e.target.value)} />
-            </div>
-            <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
-              <button className="btn ghost" onClick={() => setShowNew(false)}>Cancel</button>
-              <button className="btn primary" onClick={submitNew} disabled={!name.trim()}>Create project</button>
-            </div>
+        <FormModal dirty={!!(name || vendor || buyer || buyerEmail)} onClose={closeNew}>
+          <h2 className="display" style={{ fontSize: 22, marginBottom: 16 }}>New project</h2>
+          <div className="field">
+            <label className="eyebrow">Project name</label>
+            <input type="text" placeholder="e.g. Youreka UNA 7 SKUs" value={name}
+                   onChange={(e) => setName(e.target.value)} autoFocus />
           </div>
-        </div>
+          <div className="field">
+            <label className="eyebrow">Vendor / factory</label>
+            <input type="text" placeholder="e.g. ChinaAlpha" value={vendor}
+                   onChange={(e) => setVendor(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="eyebrow">Buyer</label>
+            <input type="text" placeholder="e.g. Lydia" value={buyer}
+                   onChange={(e) => setBuyer(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="eyebrow">Buyer email (for daily digests)</label>
+            <input type="email" placeholder="e.g. lydia@hamleys.com" value={buyerEmail}
+                   onChange={(e) => setBuyerEmail(e.target.value)} />
+          </div>
+          <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn ghost" onClick={closeNew}>Cancel</button>
+            <button className="btn primary" onClick={submitNew} disabled={!name.trim()}>Create project</button>
+          </div>
+        </FormModal>
       )}
     </main>
   );

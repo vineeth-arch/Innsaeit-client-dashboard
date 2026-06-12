@@ -697,3 +697,14 @@ create table if not exists public.app_settings (
   value jsonb not null default 'false'
 );
 alter table public.app_settings enable row level security;
+
+-- ===== Migration: 5-value status on projects + per-SKU status =====
+-- Run this block in the Supabase SQL Editor against the live project.
+-- Projects gain 'cancelled'; SKUs get their own status with the same five
+-- values. Existing admin-all RLS policies cover the updates — no new policies.
+alter table public.projects drop constraint if exists projects_status_check;
+alter table public.projects add constraint projects_status_check
+  check (status in ('active','on_hold','done','archived','cancelled'));
+
+alter table public.skus add column if not exists status text not null default 'active'
+  check (status in ('active','on_hold','done','archived','cancelled'));

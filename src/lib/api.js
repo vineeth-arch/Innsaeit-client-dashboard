@@ -41,12 +41,18 @@ export async function fetchStageTemplates(clientId) {
 }
 
 export async function fetchProjects(clientId) {
+  // All statuses, including archived — the dashboard groups non-active
+  // projects into its own "Done & inactive" section.
   const { data } = await supabase
     .from('projects').select('*, skus(id)')
     .eq('client_id', clientId)
-    .neq('status', 'archived')
     .order('updated_at', { ascending: false });
   return data || [];
+}
+
+export async function updateProjectStatus(projectId, status) { // admin only via RLS
+  const { error } = await supabase.from('projects').update({ status }).eq('id', projectId);
+  if (error) throw error;
 }
 
 export async function fetchProject(projectId) {
@@ -145,6 +151,51 @@ export async function createSku(clientId, projectId, fields) {
     .select().single();
   if (error) throw error;
   return data;
+}
+
+// Copies a SKU's descriptive fields into a fresh row in the same project.
+// Progress is deliberately NOT copied: the insert triggers seed clean stages
+// and checklist items, and per-state columns (changes_requested, im_done,
+// status) reset to their defaults.
+export async function duplicateSku(sku) {
+  const {
+    id, created_at, updated_at, client_id, project_id,
+    changes_requested, changes_requested_at, changes_requested_by,
+    im_done, im_done_at, status,
+    sku_stages, projects, // joined relations from fetchSku, not columns
+    ...fields
+  } = sku;
+  return createSku(client_id, project_id, {
+    ...fields,
+    product_name: `${sku.product_name} (copy)`,
+  });
+}
+
+export async function updateSkuDetails(skuId, { product_name, hamleys_sku, vendor_item_code, sub_brand }) { // admin only via RLS
+  const { error } = await supabase.from('skus').update({
+    product_name,
+    hamleys_sku: hamleys_sku || null,
+    vendor_item_code: vendor_item_code || null,
+    sub_brand: sub_brand || null,
+  }).eq('id', skuId);
+  if (error) throw error;
+}
+
+export async function updateSkuStatus(skuId, status) { // admin only via RLS
+  const { error } = await supabase.from('skus').update({ status }).eq('id', skuId);
+  if (error) throw error;
+}
+
+// Hard delete: server removes the R2 objects first, then the row (DB cascades
+// clean stages, versions, files, comments, checklist items). Admin-only.
+export async function deleteSku(skuId) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch('/api/sku/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ skuId }),
+  });
+  if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || 'Delete failed'); }
 }
 
 export async function toggleStage(stageRow, done) {
