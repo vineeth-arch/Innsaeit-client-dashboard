@@ -4,12 +4,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.jsx';
 import StageRail from '../components/StageRail.jsx';
 import FormModal from '../components/FormModal.jsx';
+import SubBrandPicker from '../components/SubBrandPicker.jsx';
 import {
   fetchProject, fetchSkus, fetchStageTemplates, createSku, toggleStage,
-  updateProjectBuyer, effectiveBuyer, fetchProjectChecklistSummary,
+  updateProjectDetails, effectiveBuyer, fetchProjectChecklistSummary,
   updateProjectStatus, notifyComplianceApproved,
 } from '../lib/api.js';
-import { STATUS_OPTIONS, STATUS_LABEL, statusBadgeClass, isActive, SUB_BRANDS } from '../lib/status.js';
+import { STATUS_OPTIONS, STATUS_LABEL, statusBadgeClass, isActive } from '../lib/status.js';
 import { buildProjectCsv, downloadCsv, projectCsvFilename, buildProjectSummary } from '../lib/export.js';
 
 export default function ProjectView() {
@@ -22,9 +23,9 @@ export default function ProjectView() {
   const [filter, setFilter] = useState('');
   const [showNew, setShowNew] = useState(false);
   const [f, setF] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '', compliance_owner: 'internal', second_gate: false, buyer_override: '', buyer_email_override: '', has_im: false, print_vendor: '' });
-  const [editingBuyer, setEditingBuyer] = useState(false);
-  const [buyerDraft, setBuyerDraft] = useState('');
-  const [buyerEmailDraft, setBuyerEmailDraft] = useState('');
+  // project edit state (the full New-project field set)
+  const [editingProject, setEditingProject] = useState(false);
+  const [pd, setPd] = useState({ name: '', vendor: '', buyer: '', buyer_email: '' });
   const [copied, setCopied] = useState(false);
   const [err, setErr] = useState('');
   const [checklistSummary, setChecklistSummary] = useState({});
@@ -84,7 +85,7 @@ export default function ProjectView() {
     try {
       await createSku(project.client_id, projectId, {
         ...f,
-        sub_brand: f.sub_brand === 'Other / none' ? null : f.sub_brand || null,
+        sub_brand: f.sub_brand || null,
         buyer_override: f.buyer_override.trim() || null,
         buyer_email_override: f.buyer_email_override.trim() || null,
         print_vendor: f.print_vendor.trim() || null,
@@ -99,21 +100,39 @@ export default function ProjectView() {
     }
   }
 
-  function startEditBuyer() {
-    setErr('');
-    setBuyerDraft(project.buyer || '');
-    setBuyerEmailDraft(project.buyer_email || '');
-    setEditingBuyer(true);
+  function projectDraft() {
+    return {
+      name: project.name,
+      vendor: project.vendor || '',
+      buyer: project.buyer || '',
+      buyer_email: project.buyer_email || '',
+    };
   }
 
-  async function saveBuyer() {
+  function startEditProject() {
+    setErr('');
+    setPd(projectDraft());
+    setEditingProject(true);
+  }
+
+  const projectDirty = editingProject && !!project
+    && Object.entries(projectDraft()).some(([k, v]) => pd[k] !== v);
+
+  async function saveProject() {
+    if (!pd.name.trim()) return;
     setErr('');
     try {
-      await updateProjectBuyer(project.id, buyerDraft.trim() || null, buyerEmailDraft.trim() || null);
-      setEditingBuyer(false);
+      await updateProjectDetails(project.id, {
+        ...pd,
+        name: pd.name.trim(),
+        vendor: pd.vendor.trim(),
+        buyer: pd.buyer.trim(),
+        buyer_email: pd.buyer_email.trim(),
+      });
+      setEditingProject(false);
       setProject(await fetchProject(projectId)); // refetch so inherited SKU rows update live
     } catch (e) {
-      setErr(e.message || 'Could not save buyer.');
+      setErr(e.message || 'Could not save project.');
     }
   }
 
@@ -209,29 +228,25 @@ export default function ProjectView() {
       <div className="page-head">
         <div>
           <p className="eyebrow"><Link to="/">Projects</Link> / {project.vendor || 'Vendor TBC'}</p>
-          <h1 className="display">{project.name}</h1>
-          {editingBuyer ? (
-            <div className="toolrow" style={{ marginTop: 8 }}>
-              <input type="text" placeholder="Buyer name" value={buyerDraft} autoFocus
-                     onChange={(e) => setBuyerDraft(e.target.value)} style={{ width: 200 }} />
-              <input type="email" placeholder="Buyer email" value={buyerEmailDraft}
-                     onChange={(e) => setBuyerEmailDraft(e.target.value)} style={{ width: 220 }} />
-              <button className="btn primary sm" onClick={saveBuyer}>Save</button>
-              <button className="btn ghost sm" onClick={() => { setErr(''); setEditingBuyer(false); }}>Cancel</button>
-              {err && <p className="error-text">{err}</p>}
-            </div>
-          ) : (
-            (project.buyer || isAdmin) && (
-              <p className="sub" style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {project.buyer ? <span>Buyer: {project.buyer}</span> : <span style={{ color: 'var(--text-faint)' }}>No buyer set</span>}
-                {project.buyer_email && (
-                  <span style={{ color: 'var(--text-faint)', fontSize: 12.5 }}>({project.buyer_email})</span>
-                )}
-                {isAdmin && (
-                  <button className="btn ghost sm" onClick={startEditBuyer}>{project.buyer ? 'Edit' : 'Add buyer'}</button>
-                )}
-              </p>
-            )
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="display">{project.name}</h1>
+            {isAdmin && (
+              <button className="btn ghost sm icon" onClick={startEditProject}
+                      aria-label="Edit project details" title="Edit project details">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {(project.buyer || isAdmin) && (
+            <p className="sub" style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {project.buyer ? <span>Buyer: {project.buyer}</span> : <span style={{ color: 'var(--text-faint)' }}>No buyer set</span>}
+              {project.buyer_email && (
+                <span style={{ color: 'var(--text-faint)', fontSize: 12.5 }}>({project.buyer_email})</span>
+              )}
+            </p>
           )}
         </div>
         <div className="toolrow">
@@ -293,9 +308,7 @@ export default function ProjectView() {
             </div>
             <div className="field">
               <label className="eyebrow">Sub-brand</label>
-              <select value={f.sub_brand} onChange={(e) => setF({ ...f, sub_brand: e.target.value })}>
-                {SUB_BRANDS.map((b) => <option key={b} value={b}>{b || 'Select…'}</option>)}
-              </select>
+              <SubBrandPicker value={f.sub_brand} onChange={(v) => setF({ ...f, sub_brand: v })} />
             </div>
             <div className="field">
               <label className="eyebrow">Compliance owner</label>
@@ -336,6 +349,37 @@ export default function ProjectView() {
               <button className="btn ghost" onClick={() => { setErr(''); setShowNew(false); }}>Cancel</button>
               <button className="btn primary" onClick={submitNew} disabled={!f.product_name.trim()}>Add SKU</button>
             </div>
+        </FormModal>
+      )}
+
+      {editingProject && (
+        <FormModal dirty={projectDirty} onClose={() => { setErr(''); setEditingProject(false); }}>
+          <h2 className="display" style={{ fontSize: 22, marginBottom: 16 }}>Edit project</h2>
+          <div className="field">
+            <label className="eyebrow">Project name</label>
+            <input type="text" placeholder="e.g. Youreka UNA 7 SKUs" value={pd.name} autoFocus
+                   onChange={(e) => setPd({ ...pd, name: e.target.value })} />
+          </div>
+          <div className="field">
+            <label className="eyebrow">Vendor / factory</label>
+            <input type="text" placeholder="e.g. ChinaAlpha" value={pd.vendor}
+                   onChange={(e) => setPd({ ...pd, vendor: e.target.value })} />
+          </div>
+          <div className="field">
+            <label className="eyebrow">Buyer</label>
+            <input type="text" placeholder="e.g. Lydia" value={pd.buyer}
+                   onChange={(e) => setPd({ ...pd, buyer: e.target.value })} />
+          </div>
+          <div className="field">
+            <label className="eyebrow">Buyer email (for daily digests)</label>
+            <input type="email" placeholder="e.g. lydia@hamleys.com" value={pd.buyer_email}
+                   onChange={(e) => setPd({ ...pd, buyer_email: e.target.value })} />
+          </div>
+          {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
+          <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn ghost" onClick={() => { setErr(''); setEditingProject(false); }}>Cancel</button>
+            <button className="btn primary" onClick={saveProject} disabled={!pd.name.trim()}>Save</button>
+          </div>
         </FormModal>
       )}
     </main>

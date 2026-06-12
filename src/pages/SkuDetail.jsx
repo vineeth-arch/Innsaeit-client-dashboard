@@ -6,12 +6,13 @@ import FileViewer from '../components/FileViewer.jsx';
 import ChecklistCard from '../components/ChecklistCard.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import FormModal, { useUnsavedWarning } from '../components/FormModal.jsx';
-import { STATUS_OPTIONS, statusBadgeClass, STATUS_LABEL, SUB_BRANDS } from '../lib/status.js';
+import SubBrandPicker from '../components/SubBrandPicker.jsx';
+import { STATUS_OPTIONS, statusBadgeClass, STATUS_LABEL } from '../lib/status.js';
 import {
   fetchSku, fetchStageTemplates, fetchFiles, fetchComments, fetchClient,
   toggleStage, addTextBrief, addExternalLink, addComment, deleteComment,
   uploadToR2, registerUploadedFile, deleteFile,
-  updateSkuBuyer, effectiveBuyer, updateSkuPrintVendor,
+  effectiveBuyer,
   requestSkuChanges, resolveSkuChanges,
   fetchChecklistItems, fetchSkuChecker,
   toggleChecklistItem, generateSkuChecklist, addChecklistItem, deleteChecklistItem,
@@ -61,15 +62,6 @@ export default function SkuDetail() {
 
   const [newComment, setNewComment] = useState('');
 
-  // buyer override edit state
-  const [editingBuyer, setEditingBuyer] = useState(false);
-  const [buyerDraft, setBuyerDraft] = useState('');
-  const [buyerEmailDraft, setBuyerEmailDraft] = useState('');
-
-  // print vendor edit state
-  const [editingPrintVendor, setEditingPrintVendor] = useState(false);
-  const [printVendorDraft, setPrintVendorDraft] = useState('');
-
   // request-changes state
   const [showRequest, setShowRequest] = useState(false);
   const [reason, setReason] = useState('');
@@ -88,10 +80,14 @@ export default function SkuDetail() {
   const [skuDelErr, setSkuDelErr] = useState('');
   const [skuDelBusy, setSkuDelBusy] = useState(false);
 
-  // duplicate + edit-details state
+  // duplicate + edit-details state (the full Add-SKU field set)
   const [dupBusy, setDupBusy] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
-  const [d, setD] = useState({ product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '' });
+  const [d, setD] = useState({
+    product_name: '', hamleys_sku: '', vendor_item_code: '', sub_brand: '',
+    compliance_owner: 'internal', buyer_override: '', buyer_email_override: '',
+    print_vendor: '', second_gate: false, has_im: false,
+  });
 
   // compliance checklists state
   const [checklist, setChecklist] = useState([]);
@@ -182,35 +178,6 @@ export default function SkuDetail() {
       setProgress(null);
       setErr(e2.message);
     }
-  }
-
-  function startEditBuyer() {
-    setBuyerDraft(sku.buyer_override || '');
-    setBuyerEmailDraft(sku.buyer_email_override || '');
-    setEditingBuyer(true);
-  }
-
-  async function saveBuyer() {
-    await updateSkuBuyer(sku.id, buyerDraft.trim() || null, buyerEmailDraft.trim() || null);
-    setEditingBuyer(false);
-    load();
-  }
-
-  async function resetBuyer() {
-    await updateSkuBuyer(sku.id, null, null);
-    setEditingBuyer(false);
-    load();
-  }
-
-  function startEditPrintVendor() {
-    setPrintVendorDraft(sku.print_vendor || '');
-    setEditingPrintVendor(true);
-  }
-
-  async function savePrintVendor() {
-    await updateSkuPrintVendor(sku.id, printVendorDraft.trim() || null);
-    setEditingPrintVendor(false);
-    load();
   }
 
   async function submitRequestChanges() {
@@ -327,22 +294,28 @@ export default function SkuDetail() {
     finally { setDupBusy(false); }
   }
 
-  function startEditDetails() {
-    setD({
+  function skuDraft() {
+    return {
       product_name: sku.product_name,
       hamleys_sku: sku.hamleys_sku || '',
       vendor_item_code: sku.vendor_item_code || '',
       sub_brand: sku.sub_brand || '',
-    });
+      compliance_owner: sku.compliance_owner || 'internal',
+      buyer_override: sku.buyer_override || '',
+      buyer_email_override: sku.buyer_email_override || '',
+      print_vendor: sku.print_vendor || '',
+      second_gate: !!sku.second_gate,
+      has_im: !!sku.has_im,
+    };
+  }
+
+  function startEditDetails() {
+    setD(skuDraft());
     setEditingDetails(true);
   }
 
-  const detailsDirty = editingDetails && (
-    d.product_name !== sku?.product_name
-    || d.hamleys_sku !== (sku?.hamleys_sku || '')
-    || d.vendor_item_code !== (sku?.vendor_item_code || '')
-    || d.sub_brand !== (sku?.sub_brand || '')
-  );
+  const detailsDirty = editingDetails && !!sku
+    && Object.entries(skuDraft()).some(([k, v]) => d[k] !== v);
 
   async function saveDetails() {
     if (!d.product_name.trim()) return;
@@ -351,7 +324,9 @@ export default function SkuDetail() {
       await updateSkuDetails(sku.id, {
         ...d,
         product_name: d.product_name.trim(),
-        sub_brand: d.sub_brand === 'Other / none' ? null : d.sub_brand || null,
+        buyer_override: d.buyer_override.trim(),
+        buyer_email_override: d.buyer_email_override.trim(),
+        print_vendor: d.print_vendor.trim(),
       });
       setEditingDetails(false);
       load();
@@ -400,52 +375,15 @@ export default function SkuDetail() {
             {sku.second_gate ? ' (+ second gate)' : ''}
             {sku.print_vendor ? ` · Print: ${sku.print_vendor}` : ''}
           </p>
-          {editingBuyer ? (
+          {(effectiveBuyer(sku, sku.projects?.buyer) || sku.print_vendor) && (
             <div className="toolrow" style={{ marginTop: 10 }}>
-              <input type="text" placeholder="Buyer (overrides project)" value={buyerDraft} autoFocus
-                     onChange={(e) => setBuyerDraft(e.target.value)} style={{ width: 200 }} />
-              <input type="email" placeholder="Buyer email (overrides project)" value={buyerEmailDraft}
-                     onChange={(e) => setBuyerEmailDraft(e.target.value)} style={{ width: 220 }} />
-              <button className="btn primary sm" onClick={saveBuyer}>Save</button>
-              <button className="btn ghost sm" onClick={() => setEditingBuyer(false)}>Cancel</button>
+              {effectiveBuyer(sku, sku.projects?.buyer) && (
+                <span className="badge">
+                  Buyer: {effectiveBuyer(sku, sku.projects?.buyer)}{sku.buyer_override ? ' (override)' : ''}
+                </span>
+              )}
+              {sku.print_vendor && <span className="badge">Print vendor: {sku.print_vendor}</span>}
             </div>
-          ) : (
-            (effectiveBuyer(sku, sku.projects?.buyer) || isAdmin) && (
-              <div className="toolrow" style={{ marginTop: 10 }}>
-                {effectiveBuyer(sku, sku.projects?.buyer)
-                  ? <span className="badge">Buyer: {effectiveBuyer(sku, sku.projects?.buyer)}</span>
-                  : <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>No buyer set</span>}
-                {isAdmin && (
-                  <button className="btn ghost sm" onClick={startEditBuyer}>
-                    {sku.buyer_override ? 'Edit override' : 'Override buyer'}
-                  </button>
-                )}
-                {isAdmin && sku.buyer_override && (
-                  <button className="btn ghost sm" onClick={resetBuyer}>Reset to project buyer</button>
-                )}
-              </div>
-            )
-          )}
-          {editingPrintVendor ? (
-            <div className="toolrow" style={{ marginTop: 10 }}>
-              <input type="text" placeholder="Print vendor" value={printVendorDraft} autoFocus
-                     onChange={(e) => setPrintVendorDraft(e.target.value)} style={{ width: 200 }} />
-              <button className="btn primary sm" onClick={savePrintVendor}>Save</button>
-              <button className="btn ghost sm" onClick={() => setEditingPrintVendor(false)}>Cancel</button>
-            </div>
-          ) : (
-            (sku.print_vendor || isAdmin) && (
-              <div className="toolrow" style={{ marginTop: 10 }}>
-                {sku.print_vendor
-                  ? <span className="badge">Print vendor: {sku.print_vendor}</span>
-                  : <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>No print vendor set</span>}
-                {isAdmin && (
-                  <button className="btn ghost sm" onClick={startEditPrintVendor}>
-                    {sku.print_vendor ? 'Edit print vendor' : 'Set print vendor'}
-                  </button>
-                )}
-              </div>
-            )
           )}
           <div className="toolrow" style={{ marginTop: 10 }} data-tour="request-changes">
             {sku.status && sku.status !== 'active' && (
@@ -511,7 +449,13 @@ export default function SkuDetail() {
                       style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }}>
                 {STATUS_OPTIONS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
               </select>
-              <button className="btn ghost sm" onClick={startEditDetails}>Edit details</button>
+              <button className="btn ghost sm icon" onClick={startEditDetails}
+                      aria-label="Edit SKU details" title="Edit SKU details">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+              </button>
               <button className="btn ghost sm" onClick={onDuplicate} disabled={dupBusy}>
                 {dupBusy ? 'Duplicating…' : 'Duplicate'}
               </button>
@@ -768,10 +712,42 @@ export default function SkuDetail() {
           </div>
           <div className="field">
             <label className="eyebrow">Sub-brand</label>
-            <select value={d.sub_brand} onChange={(e) => setD({ ...d, sub_brand: e.target.value })}>
-              {SUB_BRANDS.map((b) => <option key={b} value={b}>{b || 'Select…'}</option>)}
+            <SubBrandPicker value={d.sub_brand} onChange={(v) => setD({ ...d, sub_brand: v })} />
+          </div>
+          <div className="field">
+            <label className="eyebrow">Compliance owner</label>
+            <select value={d.compliance_owner} onChange={(e) => setD({ ...d, compliance_owner: e.target.value })}>
+              <option value="internal">Santosh (internal)</option>
+              <option value="hamleys_hk_uk">Hamleys HK / UK QA</option>
             </select>
           </div>
+          <div className="field">
+            <label className="eyebrow">Buyer (overrides project buyer)</label>
+            <input type="text" placeholder="Leave blank to inherit" value={d.buyer_override}
+                   onChange={(e) => setD({ ...d, buyer_override: e.target.value })} />
+          </div>
+          <div className="field">
+            <label className="eyebrow">Buyer email (overrides project)</label>
+            <input type="email" placeholder="Leave blank to inherit" value={d.buyer_email_override}
+                   onChange={(e) => setD({ ...d, buyer_email_override: e.target.value })} />
+          </div>
+          <div className="field">
+            <label className="eyebrow">Print vendor</label>
+            <input type="text" placeholder="Where final files go for printing" value={d.print_vendor}
+                   onChange={(e) => setD({ ...d, print_vendor: e.target.value })} />
+          </div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={d.second_gate}
+                   onChange={(e) => setD({ ...d, second_gate: e.target.checked })}
+                   style={{ width: 'auto' }} />
+            <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Export SKU: needs both compliance gates</span>
+          </label>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, cursor: 'pointer' }}>
+            <input type="checkbox" checked={d.has_im}
+                   onChange={(e) => setD({ ...d, has_im: e.target.checked })}
+                   style={{ width: 'auto' }} />
+            <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Has Instruction Manual</span>
+          </label>
           <div className="toolrow" style={{ justifyContent: 'flex-end' }}>
             <button className="btn ghost" onClick={() => setEditingDetails(false)}>Cancel</button>
             <button className="btn primary" onClick={saveDetails} disabled={!d.product_name.trim()}>Save</button>

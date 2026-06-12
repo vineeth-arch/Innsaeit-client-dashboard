@@ -21,4 +21,7 @@ export function statusBadgeClass(status) {
 // Rows with no status column yet (pre-migration) count as active.
 export const isActive = (row) => !row.status || row.status === 'active';
 
-export const SUB_BRANDS = ['', 'Ralleyz', 'Youreka', 'Snapkid', 'Miens', 'KSY', 'Other / none'];
+export const SUB_BRANDS = [
+  'Hamleys', 'Youreka', 'Shooting Star', 'Zoozi', 'Ralleyz', 'Kingdom of Play',
+  'Luvley', 'Splash', 'Disney', 'Marvel', 'Garfield', 'Harry Potter',
+];

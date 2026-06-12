@@ -120,28 +120,18 @@ export function effectiveBuyer(sku, projectBuyer) {
   return sku?.buyer_override || projectBuyer || null;
 }
 
-export async function updateProjectBuyer(projectId, buyer, buyerEmail) {
+// Full project edit — the same fields as the New-project form. An empty buyer
+// clears it; SKUs without an override inherit the new value live.
+export async function updateProjectDetails(projectId, { name, vendor, buyer, buyer_email }) { // admin only via RLS
   const { error } = await supabase
     .from('projects')
-    .update({ buyer: buyer || null, buyer_email: buyerEmail || null })
+    .update({
+      name,
+      vendor: vendor || null,
+      buyer: buyer || null,
+      buyer_email: buyer_email || null,
+    })
     .eq('id', projectId);
-  if (error) throw error;
-}
-
-// value null/empty clears the override → SKU goes back to inheriting the project buyer.
-export async function updateSkuBuyer(skuId, value, email) {
-  const { error } = await supabase
-    .from('skus')
-    .update({ buyer_override: value || null, buyer_email_override: email || null })
-    .eq('id', skuId);
-  if (error) throw error;
-}
-
-// value null/empty clears the print vendor. Distinct from projects.vendor
-// (the factory) — this is where final files go for printing.
-export async function updateSkuPrintVendor(skuId, value) { // admin only via RLS
-  const { error } = await supabase
-    .from('skus').update({ print_vendor: value || null }).eq('id', skuId);
   if (error) throw error;
 }
 
@@ -171,12 +161,24 @@ export async function duplicateSku(sku) {
   });
 }
 
-export async function updateSkuDetails(skuId, { product_name, hamleys_sku, vendor_item_code, sub_brand }) { // admin only via RLS
+// Full SKU edit — the same fields as the Add-SKU form. Clearing buyer_override
+// (or its email) returns the SKU to inheriting the project buyer.
+export async function updateSkuDetails(skuId, {
+  product_name, hamleys_sku, vendor_item_code, sub_brand,
+  compliance_owner, buyer_override, buyer_email_override, print_vendor,
+  second_gate, has_im,
+}) { // admin only via RLS
   const { error } = await supabase.from('skus').update({
     product_name,
     hamleys_sku: hamleys_sku || null,
     vendor_item_code: vendor_item_code || null,
     sub_brand: sub_brand || null,
+    compliance_owner,
+    buyer_override: buyer_override || null,
+    buyer_email_override: buyer_email_override || null,
+    print_vendor: print_vendor || null,
+    second_gate,
+    has_im,
   }).eq('id', skuId);
   if (error) throw error;
 }
